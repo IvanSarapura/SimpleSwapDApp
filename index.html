@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SimpleSwap dApp</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
+      rel="stylesheet"
+    />
+    <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.umd.min.js"></script>
+  </head>
+  <body>
+    <!-- Loading overlay displayed during blockchain transactions -->
+    <div id="loadingIndicator" class="loading-indicator hidden">
+      <div class="spinner"></div>
+      <p>Processing...</p>
+    </div>
+
+    <!-- Toast notification system for user feedback -->
+    <div id="notification" class="notification hidden">
+      <div class="notification-content">
+        <span id="notificationMessage"></span>
+        <button onclick="closeNotification()" class="close-btn">&times;</button>
+      </div>
+    </div>
+
+    <!-- Top navigation bar with wallet connection and price updates -->
+    <nav class="navbar">
+      <div class="nav-container">
+        <h1 class="logo">SimpleSwap DEX</h1>
+        <div class="nav-right">
+          <div class="price-section">
+            <button id="updatePricesBtn" class="price-btn">
+              <i class="fas fa-sync-alt"></i> Update Prices
+            </button>
+            <div class="price-display">
+              <span id="currentPrice">Price: -</span>
+            </div>
+          </div>
+          <button id="connectBtn" class="connect-btn">
+            <i class="fas fa-wallet"></i> Connect MetaMask
+          </button>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main application content area -->
+    <main class="main-content">
+      <div class="container">
+        <!-- Three-column layout for the dApp interface -->
+        <div class="grid-container">
+          <!-- Left sidebar containing token management tools -->
+          <div class="left-column">
+            <!-- Token minting section for testing purposes -->
+            <div class="card">
+              <h3>Get Test Tokens</h3>
+              <div class="button-group">
+                <button id="mintTokenA" class="btn btn-primary">
+                  <i class="fas fa-coins"></i> Mint 1000 Token A
+                </button>
+                <button id="mintTokenB" class="btn btn-primary">
+                  <i class="fas fa-coins"></i> Mint 1000 Token B
+                </button>
+              </div>
+            </div>
+
+            <!-- Token approval section for enabling swaps -->
+            <div class="card">
+              <h3>Approve Tokens</h3>
+              <button id="approveAllBtn" class="btn btn-secondary full-width">
+                <i class="fas fa-check-circle"></i> Approve All Tokens
+              </button>
+            </div>
+
+            <!-- Liquidity provision interface -->
+            <div class="card">
+              <h3>Add Liquidity</h3>
+              <div class="liquidity-inputs">
+                <div class="input-group">
+                  <label>Token A Amount:</label>
+                  <input
+                    id="liquidityAmountA"
+                    type="number"
+                    placeholder="1000"
+                    class="liquidity-input"
+                  />
+                </div>
+                <div class="input-group">
+                  <label>Token B Amount:</label>
+                  <input
+                    id="liquidityAmountB"
+                    type="number"
+                    placeholder="1000"
+                    class="liquidity-input"
+                  />
+                </div>
+              </div>
+              <button id="addLiquidityBtn" class="btn btn-success full-width">
+                <i class="fas fa-plus-circle"></i> Add Liquidity
+              </button>
+            </div>
+          </div>
+
+          <!-- Central swap interface - main functionality -->
+          <div class="center-column">
+            <div class="card swap-card">
+              <h2>Swap Tokens</h2>
+
+              <!-- Input section for source token and amount -->
+              <div class="swap-section">
+                <div class="swap-header">
+                  <label>From:</label>
+                  <select id="tokenFrom" class="token-select">
+                    <option value="tokenA">Token A</option>
+                    <option value="tokenB">Token B</option>
+                  </select>
+                </div>
+                <div class="amount-input-container">
+                  <input
+                    id="amountFrom"
+                    type="number"
+                    placeholder="0.0"
+                    class="amount-input"
+                  />
+                </div>
+              </div>
+
+              <!-- Button to reverse swap direction -->
+              <div class="swap-direction">
+                <button
+                  id="swapDirectionBtn"
+                  class="direction-btn"
+                  onclick="swapTokenAddress()"
+                >
+                  <i class="fas fa-exchange-alt"></i>
+                </button>
+              </div>
+
+              <!-- Output section for destination token and calculated amount -->
+              <div class="swap-section">
+                <div class="swap-header">
+                  <label>To:</label>
+                  <select id="tokenTo" class="token-select">
+                    <option value="tokenB">Token B</option>
+                    <option value="tokenA">Token A</option>
+                  </select>
+                </div>
+                <div class="amount-input-container">
+                  <input
+                    id="amountTo"
+                    type="number"
+                    placeholder="0.0"
+                    class="amount-input"
+                    readonly
+                  />
+                </div>
+              </div>
+
+              <!-- Display current swap rate and estimated output -->
+              <div class="swap-info">
+                <div class="info-item">
+                  <span>Price:</span>
+                  <span id="swapPrice">-</span>
+                </div>
+                <div class="info-item">
+                  <span>You will receive:</span>
+                  <span id="receiveAmount">0</span>
+                </div>
+              </div>
+
+              <!-- Swap execution and approval buttons -->
+              <div class="action-buttons">
+                <button id="approveSwapBtn" class="btn btn-warning hidden">
+                  <i class="fas fa-check"></i> Approve Token
+                </button>
+                <button
+                  id="swapBtn"
+                  class="btn btn-success full-width"
+                  disabled
+                >
+                  <i class="fas fa-exchange-alt"></i> Execute Swap
+                </button>
+              </div>
+            </div>
+
+            <!-- Remove Liquidity interface -->
+            <div class="card">
+              <h3>Remove Liquidity</h3>
+              <div class="balance-info">
+                <div class="balance-item">
+                  <span>LP Token Balance:</span>
+                  <span id="lpTokenBalance">0</span>
+                </div>
+              </div>
+              <div class="liquidity-inputs">
+                <div class="input-group">
+                  <label>LP Tokens to Remove:</label>
+                  <input
+                    id="removeLiquidityAmount"
+                    type="number"
+                    placeholder="0.0"
+                    step="0.000001"
+                    min="0"
+                    class="liquidity-input"
+                  />
+                </div>
+              </div>
+              <div class="preview-section">
+                <h4>You will receive:</h4>
+                <div class="preview-amounts">
+                  <div class="preview-item">
+                    <span>Token A:</span>
+                    <span id="previewAmountA">0</span>
+                  </div>
+                  <div class="preview-item">
+                    <span>Token B:</span>
+                    <span id="previewAmountB">0</span>
+                  </div>
+                </div>
+              </div>
+              <button id="removeLiquidityBtn" class="btn btn-danger full-width">
+                <i class="fas fa-minus-circle"></i> Remove Liquidity
+              </button>
+            </div>
+          </div>
+
+          <!-- Right sidebar showing prices and account information -->
+          <div class="price-column">
+            <!-- User wallet information display -->
+            <div id="accountInfo" class="account-info hidden">
+              <div class="account-card">
+                <h3>Account Information</h3>
+                <p id="accountAddress">Not connected</p>
+                <div class="balances">
+                  <div class="balance-item">
+                    <span>Balance Token A:</span>
+                    <span id="balanceTokenA">0</span>
+                  </div>
+                  <div class="balance-item">
+                    <span>Balance Token B:</span>
+                    <span id="balanceTokenB">0</span>
+                  </div>
+                  <div class="balance-item">
+                    <span>LP Token Balance:</span>
+                    <span id="lpTokenBalanceAccount">0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live price feeds and liquidity pool information -->
+            <div class="card price-info-card">
+              <h3>Pool Prices and Reserves Information</h3>
+              <div class="price-info">
+                <div class="price-item">
+                  <span>Token A Price:</span>
+                  <span id="priceTokenA">-</span>
+                </div>
+                <div class="price-item">
+                  <span>Token B Price:</span>
+                  <span id="priceTokenB">-</span>
+                </div>
+              </div>
+              <div class="reserves-info">
+                <h4>Pool Reserves</h4>
+                <div class="reserve-item">
+                  <span>Token A Reserve:</span>
+                  <span id="reserveTokenA">0</span>
+                </div>
+                <div class="reserve-item">
+                  <span>Token B Reserve:</span>
+                  <span id="reserveTokenB">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
