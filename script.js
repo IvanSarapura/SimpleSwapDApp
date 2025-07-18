@@ -1,11 +1,25 @@
-// ===== CONTRACT CONFIGURATION =====
+/**
+ * SimpleSwap DApp - Decentralized Exchange Interface
+ * @author Ivan Sarapura
+ * @description Frontend application for token swapping and liquidity provision
+ */
+
+// ===== 1. CONFIGURATION AND IMPORTS =====
+
+/**
+ * Contract addresses on the blockchain
+ * @constant {Object}
+ */
 const CONTRACT_ADDRESSES = {
   SIMPLE_SWAP: "0x957d727337297b649AE8df9Cad0b157cf04C3224",
   TOKEN_A: "0xCDBDDA06C8b9dF27a8502e57C8614d4EfAc5ED76",
   TOKEN_B: "0x11d6A5B61eE830b97C88b4Fc26849274517DfF94",
 };
 
-// Simplified ABIs - only the functions we need for the DApp
+/**
+ * Simplified ABIs - only the functions we need for the DApp
+ * @constant {Object}
+ */
 const CONTRACT_ABIS = {
   SIMPLE_SWAP: [
     {
@@ -202,13 +216,58 @@ const CONTRACT_ABIS = {
   ],
 };
 
-// ===== GLOBAL VARIABLES =====
+// ===== 2. CONSTANTS FOR MAGIC NUMBERS =====
+
+/**
+ * Application constants
+ * @constant {Object}
+ */
+const CONSTANTS = {
+  SLIPPAGE_TOLERANCE: 5, // 5%
+  DEADLINE_MINUTES: 10, // 10 minutes
+  MINT_AMOUNT: "1000", // Default mint amount
+  AUTO_HIDE_NOTIFICATION_MS: 5000, // 5 seconds
+  DECIMAL_PLACES: {
+    BALANCE: 2,
+    LP_TOKENS: 16,
+    PRICE: 2,
+  },
+  PERCENTAGE: {
+    SLIPPAGE_MULTIPLIER: 95, // 95% for 5% slippage
+    FULL: 100,
+  },
+  TOKEN_NAMES: {
+    A: "TACC",
+    B: "TBCC",
+  },
+  ADDRESS_DISPLAY_LENGTH: {
+    START: 6,
+    END: 4,
+  },
+};
+
+// ===== 3. GLOBAL VARIABLES AND STATE =====
+
+/**
+ * Global blockchain connection variables
+ */
 let provider;
 let signer;
 let userAddress;
 let contracts = {};
 
-// ===== DOM ELEMENTS =====
+/**
+ * Flag to prevent infinite loops in liquidity autofill
+ * @type {boolean}
+ */
+let isAutoFillingLiquidity = false;
+
+// ===== 4. DOM ELEMENTS =====
+
+/**
+ * DOM elements cache for better performance
+ * @constant {Object}
+ */
 const elements = {
   connectBtn: document.getElementById("connectBtn"),
   accountInfo: document.getElementById("accountInfo"),
@@ -258,19 +317,174 @@ const elements = {
   notificationMessage: document.getElementById("notificationMessage"),
 };
 
-// ===== UTILITY FUNCTIONS =====
+// ===== 5. MAIN INITIALIZATION =====
+
+/**
+ * Initializes the SimpleSwap DApp
+ * Sets up event listeners and verifies dependencies
+ * @returns {void}
+ */
+function initialize() {
+  console.log("Initializing application...");
+
+  // Verify ethers.js is loaded
+  if (typeof ethers === "undefined") {
+    console.error("ethers.js is not loaded");
+    alert("Error: ethers.js failed to load correctly. Please reload the page.");
+    return;
+  }
+
+  setupEvents();
+  console.log("Application initialized successfully");
+}
+
+// ===== 6. EVENT SETUP =====
+
+/**
+ * Sets up all event listeners for the application
+ * Includes wallet, swap, liquidity, and MetaMask events
+ * @returns {void}
+ */
+function setupEvents() {
+  console.log("Setting up event listeners...");
+
+  // Wallet connection button
+  if (elements.connectBtn) {
+    elements.connectBtn.addEventListener("click", () => {
+      if (userAddress) {
+        disconnect();
+      } else {
+        connect();
+      }
+    });
+  }
+
+  // Swap-related events
+  if (elements.amountFrom) {
+    elements.amountFrom.addEventListener("input", () => {
+      calculateSwap();
+      checkApproval();
+    });
+  }
+
+  if (elements.tokenFrom) {
+    elements.tokenFrom.addEventListener("change", () => {
+      calculateSwap();
+      checkApproval();
+    });
+  }
+
+  if (elements.tokenTo) {
+    elements.tokenTo.addEventListener("change", () => {
+      calculateSwap();
+      checkApproval();
+    });
+  }
+
+  if (elements.approveSwapBtn) {
+    elements.approveSwapBtn.addEventListener("click", approveToken);
+  }
+
+  if (elements.swapBtn) {
+    elements.swapBtn.addEventListener("click", executeSwap);
+  }
+
+  // Token minting events
+  if (elements.mintTokenA) {
+    elements.mintTokenA.addEventListener("click", mintTokenA);
+  }
+
+  if (elements.mintTokenB) {
+    elements.mintTokenB.addEventListener("click", mintTokenB);
+  }
+
+  // Token approval events
+  if (elements.approveAllBtn) {
+    elements.approveAllBtn.addEventListener("click", approveAllTokens);
+  }
+
+  // Price update events
+  if (elements.updatePricesBtn) {
+    elements.updatePricesBtn.addEventListener("click", updatePrices);
+  }
+
+  // Liquidity events
+  if (elements.addLiquidityBtn) {
+    elements.addLiquidityBtn.addEventListener("click", addLiquidity);
+  }
+
+  // Liquidity autofill events
+  if (elements.liquidityAmountA) {
+    elements.liquidityAmountA.addEventListener("input", async () => {
+      await autofillLiquidityFields("A");
+    });
+  }
+  if (elements.liquidityAmountB) {
+    elements.liquidityAmountB.addEventListener("input", async () => {
+      await autofillLiquidityFields("B");
+    });
+  }
+
+  // Remove liquidity events
+  if (elements.removeLiquidityBtn) {
+    elements.removeLiquidityBtn.addEventListener("click", removeLiquidity);
+  }
+
+  if (elements.removeLiquidityAmount) {
+    elements.removeLiquidityAmount.addEventListener(
+      "input",
+      calculateRemoveLiquidityPreview
+    );
+  }
+
+  // MetaMask events
+  if (window.ethereum) {
+    window.ethereum.on("accountsChanged", (accounts) => {
+      console.log("Accounts changed:", accounts);
+      if (accounts.length === 0) {
+        disconnect();
+      } else {
+        connect();
+      }
+    });
+
+    window.ethereum.on("chainChanged", () => {
+      console.log("Network changed");
+      window.location.reload();
+    });
+  }
+
+  console.log("Event listeners configured");
+}
+
+// ===== 7. UTILITY FUNCTIONS =====
+
+/**
+ * Shows the loading indicator
+ * @returns {void}
+ */
 function showLoading() {
   if (elements.loadingIndicator) {
     elements.loadingIndicator.classList.remove("hidden");
   }
 }
 
+/**
+ * Hides the loading indicator
+ * @returns {void}
+ */
 function hideLoading() {
   if (elements.loadingIndicator) {
     elements.loadingIndicator.classList.add("hidden");
   }
 }
 
+/**
+ * Shows a notification to the user
+ * @param {string} message - The message to display
+ * @param {string} type - Type of notification (info, success, error)
+ * @returns {void}
+ */
 function showNotification(message, type = "info") {
   console.log(`[${type.toUpperCase()}] ${message}`);
   if (elements.notificationMessage && elements.notification) {
@@ -278,20 +492,29 @@ function showNotification(message, type = "info") {
     elements.notification.className = `notification ${type}`;
     elements.notification.classList.remove("hidden");
 
-    // Auto-hide notification after 5 seconds
+    // Auto-hide notification after configured time
     setTimeout(() => {
       elements.notification.classList.add("hidden");
-    }, 5000);
+    }, CONSTANTS.AUTO_HIDE_NOTIFICATION_MS);
   }
 }
 
+/**
+ * Closes the notification manually
+ * @returns {void}
+ */
 function closeNotification() {
   if (elements.notification) {
     elements.notification.classList.add("hidden");
   }
 }
 
-// ===== WALLET CONNECTION FUNCTIONS =====
+// ===== 8. WALLET MANAGEMENT =====
+
+/**
+ * Connects to MetaMask wallet and initializes contracts
+ * @returns {Promise<void>}
+ */
 async function connect() {
   console.log("Initiating wallet connection...");
 
@@ -315,8 +538,8 @@ async function connect() {
       if (elements.accountAddress) {
         elements.accountAddress.textContent = `Connected: ${userAddress.slice(
           0,
-          6
-        )}...${userAddress.slice(-4)}`;
+          CONSTANTS.ADDRESS_DISPLAY_LENGTH.START
+        )}...${userAddress.slice(-CONSTANTS.ADDRESS_DISPLAY_LENGTH.END)}`;
       }
 
       if (elements.accountInfo) {
@@ -363,6 +586,10 @@ async function connect() {
   }
 }
 
+/**
+ * Disconnects from the wallet and resets the application state
+ * @returns {void}
+ */
 function disconnect() {
   console.log("Disconnecting wallet...");
 
@@ -392,7 +619,10 @@ function disconnect() {
   showNotification("Wallet disconnected", "info");
 }
 
-// ===== BALANCE FUNCTIONS =====
+/**
+ * Updates all token balances from the blockchain
+ * @returns {Promise<void>}
+ */
 async function updateBalances() {
   if (
     !userAddress ||
@@ -417,8 +647,8 @@ async function updateBalances() {
       elements.balanceTokenA.textContent = parseFloat(
         ethers.utils.formatEther(balanceA)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
     }
 
@@ -426,8 +656,8 @@ async function updateBalances() {
       elements.balanceTokenB.textContent = parseFloat(
         ethers.utils.formatEther(balanceB)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
     }
 
@@ -435,9 +665,8 @@ async function updateBalances() {
       elements.lpTokenBalance.textContent = parseFloat(
         ethers.utils.formatEther(lpBalance)
       ).toLocaleString("en-US", {
-        // .toFixed(16); LP Token Balance in Remove Liquidity
-        minimumFractionDigits: 16,
-        maximumFractionDigits: 16,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.LP_TOKENS,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.LP_TOKENS,
       });
     }
 
@@ -445,8 +674,8 @@ async function updateBalances() {
       elements.lpTokenBalanceAccount.textContent = parseFloat(
         ethers.utils.formatEther(lpBalance)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
     }
 
@@ -457,7 +686,12 @@ async function updateBalances() {
   }
 }
 
-// ===== SWAP FUNCTIONS =====
+// ===== 9. SWAP FUNCTIONS =====
+
+/**
+ * Calculates the output amount for a token swap
+ * @returns {Promise<void>}
+ */
 async function calculateSwap() {
   // Check if required elements and values are available
   if (
@@ -480,7 +714,7 @@ async function calculateSwap() {
       CONTRACT_ADDRESSES.TOKEN_B
     );
 
-    // Determine swap address and reserves
+    // Determine swap direction and reserves
     const isAtoB = elements.tokenFrom.value === "tokenA";
     const reserveIn = isAtoB ? reserveA : reserveB;
     const reserveOut = isAtoB ? reserveB : reserveA;
@@ -500,7 +734,7 @@ async function calculateSwap() {
     );
     const formattedAmount = parseFloat(
       ethers.utils.formatEther(amountOut)
-    ).toFixed(2);
+    ).toFixed(CONSTANTS.DECIMAL_PLACES.BALANCE);
 
     // Update UI with calculated amounts
     if (elements.amountTo) elements.amountTo.value = formattedAmount;
@@ -508,8 +742,8 @@ async function calculateSwap() {
       elements.receiveAmount.textContent = parseFloat(
         ethers.utils.formatEther(amountOut)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
 
     // Calculate and display exchange rate
@@ -517,13 +751,19 @@ async function calculateSwap() {
       parseFloat(ethers.utils.formatEther(amountOut)) /
       parseFloat(elements.amountFrom.value)
     ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
+      maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
     });
     if (elements.swapPrice) {
       elements.swapPrice.textContent = `1 ${
-        elements.tokenFrom.value === "tokenA" ? "TACC" : "TBCC"
-      } = ${price} ${elements.tokenTo.value === "tokenA" ? "TACC" : "TBCC"}`;
+        elements.tokenFrom.value === "tokenA"
+          ? CONSTANTS.TOKEN_NAMES.A
+          : CONSTANTS.TOKEN_NAMES.B
+      } = ${price} ${
+        elements.tokenTo.value === "tokenA"
+          ? CONSTANTS.TOKEN_NAMES.A
+          : CONSTANTS.TOKEN_NAMES.B
+      }`;
     }
   } catch (error) {
     console.error("Error calculating swap:", error);
@@ -532,6 +772,10 @@ async function calculateSwap() {
   }
 }
 
+/**
+ * Checks if token approval is needed for the swap
+ * @returns {Promise<void>}
+ */
 async function checkApproval() {
   // Check if required data is available
   if (
@@ -578,6 +822,10 @@ async function checkApproval() {
   }
 }
 
+/**
+ * Approves tokens for swap transactions
+ * @returns {Promise<void>}
+ */
 async function approveToken() {
   if (!userAddress || !elements.amountFrom || !elements.amountFrom.value)
     return;
@@ -610,6 +858,10 @@ async function approveToken() {
   }
 }
 
+/**
+ * Executes a token swap transaction
+ * @returns {Promise<void>}
+ */
 async function executeSwap() {
   if (!userAddress || !elements.amountFrom || !elements.amountFrom.value)
     return;
@@ -630,7 +882,8 @@ async function executeSwap() {
         : CONTRACT_ADDRESSES.TOKEN_B;
 
     const path = [tokenInAddress, tokenOutAddress];
-    const deadline = Math.floor(Date.now() / 1000) + 600; // 10 minutes from now
+    const deadline =
+      Math.floor(Date.now() / 1000) + CONSTANTS.DEADLINE_MINUTES * 60;
 
     // Execute swap transaction
     const tx = await contracts.simpleSwap.swapExactTokensForTokens(
@@ -661,6 +914,10 @@ async function executeSwap() {
   }
 }
 
+/**
+ * Swaps the selected tokens (From <-> To)
+ * @returns {void}
+ */
 function swapAddress() {
   if (!elements.tokenFrom || !elements.tokenTo) return;
 
@@ -676,11 +933,16 @@ function swapAddress() {
   if (elements.amountTo) elements.amountTo.value = "";
   if (elements.receiveAmount) elements.receiveAmount.textContent = "0";
 
-  // Update approval status for new token address
+  // Update approval status for new token direction
   checkApproval();
 }
 
-// ===== PRICE FUNCTIONS =====
+// ===== 10. PRICE FUNCTIONS =====
+
+/**
+ * Updates price displays and reserve information
+ * @returns {Promise<void>}
+ */
 async function updatePrices() {
   if (!contracts.simpleSwap) return;
 
@@ -698,8 +960,8 @@ async function updatePrices() {
       elements.reserveTokenA.textContent = parseFloat(
         ethers.utils.formatEther(reserveA)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
     }
 
@@ -707,32 +969,23 @@ async function updatePrices() {
       elements.reserveTokenB.textContent = parseFloat(
         ethers.utils.formatEther(reserveB)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
     }
 
     // Calculate and display exchange rates
     if (!reserveA.isZero() && !reserveB.isZero()) {
-      // THEORETICAL PRICE: Based only on reserves (x/y ratio)
-      // For general pool rate display
-      const theoreticalPriceA =
-        parseFloat(ethers.utils.formatEther(reserveB)) /
-        parseFloat(ethers.utils.formatEther(reserveA));
-      const theoreticalPriceB =
-        parseFloat(ethers.utils.formatEther(reserveA)) /
-        parseFloat(ethers.utils.formatEther(reserveB));
-
-      // REAL PRICE: Using getAmountOut() with 1 token
+      // Get real prices using getAmountOut() for accuracy
       const realPrices = await calculateRealPrices(reserveA, reserveB);
 
-      // Update price displays (using real prices for better accuracy)
+      // Update price displays
       if (elements.priceTokenA) {
         elements.priceTokenA.textContent = realPrices.priceA.toLocaleString(
           "en-US",
           {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
+            maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
           }
         );
       }
@@ -740,19 +993,19 @@ async function updatePrices() {
         elements.priceTokenB.textContent = realPrices.priceB.toLocaleString(
           "en-US",
           {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
+            maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
           }
         );
       }
 
-      // Update current price display in navigation (using real price)
+      // Update current price display in navigation
       if (elements.currentPrice) {
         elements.currentPrice.textContent = `1 Token A = ${realPrices.priceA.toLocaleString(
           "en-US",
           {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
+            minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
+            maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.PRICE,
           }
         )} Token B`;
       }
@@ -770,7 +1023,12 @@ async function updatePrices() {
   }
 }
 
-// ===== REAL PRICE CALCULATION FUNCTION =====
+/**
+ * Calculates real prices using the AMM formula
+ * @param {ethers.BigNumber} reserveA - Reserve amount for token A
+ * @param {ethers.BigNumber} reserveB - Reserve amount for token B
+ * @returns {Promise<Object>} Object containing priceA and priceB
+ */
 async function calculateRealPrices(reserveA, reserveB) {
   try {
     // Use 1 token as standard amount for price calculation
@@ -814,7 +1072,12 @@ async function calculateRealPrices(reserveA, reserveB) {
   }
 }
 
-// ===== TOKEN MINTING FUNCTIONS =====
+// ===== 11. TOKEN FUNCTIONS =====
+
+/**
+ * Mints test tokens A for the connected wallet
+ * @returns {Promise<void>}
+ */
 async function mintTokenA() {
   if (!userAddress || !contracts.tokenA) {
     showNotification("Connect your wallet first", "error");
@@ -824,10 +1087,10 @@ async function mintTokenA() {
   try {
     showLoading();
 
-    // Mint 1000 tokens
-    const mintAmount = ethers.utils.parseEther("1000");
+    // Mint configured amount of tokens
+    const mintAmount = ethers.utils.parseEther(CONSTANTS.MINT_AMOUNT);
 
-    console.log("Minting 1000 Token A...");
+    console.log(`Minting ${CONSTANTS.MINT_AMOUNT} Token A...`);
 
     // Update button state
     if (elements.mintTokenA) {
@@ -840,7 +1103,10 @@ async function mintTokenA() {
     const tx = await contracts.tokenA.mint(userAddress, mintAmount);
     await tx.wait();
 
-    showNotification("1000 Token A minted successfully!", "success");
+    showNotification(
+      `${CONSTANTS.MINT_AMOUNT} Token A minted successfully!`,
+      "success"
+    );
 
     // Update balance display
     await updateBalances();
@@ -851,12 +1117,15 @@ async function mintTokenA() {
     hideLoading();
     if (elements.mintTokenA) {
       elements.mintTokenA.disabled = false;
-      elements.mintTokenA.innerHTML =
-        '<i class="fas fa-coins"></i> Mint 1000 Token A';
+      elements.mintTokenA.innerHTML = `<i class="fas fa-coins"></i> Mint ${CONSTANTS.MINT_AMOUNT} Token A`;
     }
   }
 }
 
+/**
+ * Mints test tokens B for the connected wallet
+ * @returns {Promise<void>}
+ */
 async function mintTokenB() {
   if (!userAddress || !contracts.tokenB) {
     showNotification("Connect your wallet first", "error");
@@ -866,10 +1135,10 @@ async function mintTokenB() {
   try {
     showLoading();
 
-    // Mint 1000 tokens
-    const mintAmount = ethers.utils.parseEther("1000");
+    // Mint configured amount of tokens
+    const mintAmount = ethers.utils.parseEther(CONSTANTS.MINT_AMOUNT);
 
-    console.log("Minting 1000 Token B...");
+    console.log(`Minting ${CONSTANTS.MINT_AMOUNT} Token B...`);
 
     // Update button state
     if (elements.mintTokenB) {
@@ -882,7 +1151,10 @@ async function mintTokenB() {
     const tx = await contracts.tokenB.mint(userAddress, mintAmount);
     await tx.wait();
 
-    showNotification("1000 Token B minted successfully!", "success");
+    showNotification(
+      `${CONSTANTS.MINT_AMOUNT} Token B minted successfully!`,
+      "success"
+    );
 
     // Update balance display
     await updateBalances();
@@ -893,13 +1165,15 @@ async function mintTokenB() {
     hideLoading();
     if (elements.mintTokenB) {
       elements.mintTokenB.disabled = false;
-      elements.mintTokenB.innerHTML =
-        '<i class="fas fa-coins"></i> Mint 1000 Token B';
+      elements.mintTokenB.innerHTML = `<i class="fas fa-coins"></i> Mint ${CONSTANTS.MINT_AMOUNT} Token B`;
     }
   }
 }
 
-// ===== TOKEN APPROVAL FUNCTION =====
+/**
+ * Approves maximum amount of both tokens for the swap contract
+ * @returns {Promise<void>}
+ */
 async function approveAllTokens() {
   if (!userAddress || !contracts.tokenA || !contracts.tokenB) {
     showNotification("Connect your wallet first", "error");
@@ -951,52 +1225,65 @@ async function approveAllTokens() {
   }
 }
 
-// ===== LIQUIDITY HELPER FUNCTIONS =====
-let isAutoFillingLiquidity = false; // Bandera para evitar bucles infinitos
+// ===== 12. LIQUIDITY FUNCTIONS =====
 
+/**
+ * Autofills liquidity input fields based on pool ratio
+ * @param {string} changedField - Which field was changed ("A" or "B")
+ * @returns {Promise<void>}
+ */
 async function autofillLiquidityFields(changedField) {
   if (isAutoFillingLiquidity) return;
   isAutoFillingLiquidity = true;
+
   try {
     if (!contracts.simpleSwap) return;
+
     const inputA = elements.liquidityAmountA?.value;
     const inputB = elements.liquidityAmountB?.value;
+
     const [reserveA, reserveB] = await contracts.simpleSwap.getReserves(
       CONTRACT_ADDRESSES.TOKEN_A,
       CONTRACT_ADDRESSES.TOKEN_B
     );
-    // Si el pool está vacío, no autocompletar
+
+    // If pool is empty, don't autofill
     if (reserveA.isZero() || reserveB.isZero()) {
-      isAutoFillingLiquidity = false;
       return;
     }
+
     if (changedField === "A" && inputA && parseFloat(inputA) > 0) {
-      // Calcular B óptimo para el valor de A
+      // Calculate optimal B for given A
       const amountA = ethers.utils.parseEther(inputA.toString());
       const optimalAmountB = amountA.mul(reserveB).div(reserveA);
       const optimalBFormatted = parseFloat(
         ethers.utils.formatEther(optimalAmountB)
-      ).toFixed(2);
+      ).toFixed(CONSTANTS.DECIMAL_PLACES.BALANCE);
+
       if (elements.liquidityAmountB)
         elements.liquidityAmountB.value = optimalBFormatted;
     } else if (changedField === "B" && inputB && parseFloat(inputB) > 0) {
-      // Calcular A óptimo para el valor de B
+      // Calculate optimal A for given B
       const amountB = ethers.utils.parseEther(inputB.toString());
       const optimalAmountA = amountB.mul(reserveA).div(reserveB);
       const optimalAFormatted = parseFloat(
         ethers.utils.formatEther(optimalAmountA)
-      ).toFixed(2);
+      ).toFixed(CONSTANTS.DECIMAL_PLACES.BALANCE);
+
       if (elements.liquidityAmountA)
         elements.liquidityAmountA.value = optimalAFormatted;
     }
   } catch (error) {
-    console.error("Error autocompletando campos de liquidez:", error);
+    console.error("Error autofilling liquidity fields:", error);
   } finally {
     isAutoFillingLiquidity = false;
   }
 }
 
-// ===== LIQUIDITY FUNCTIONS =====
+/**
+ * Adds liquidity to the pool
+ * @returns {Promise<void>}
+ */
 async function addLiquidity() {
   if (!userAddress || !contracts.simpleSwap) {
     showNotification("Connect your wallet first", "error");
@@ -1050,29 +1337,16 @@ async function addLiquidity() {
 
       // Calculate optimal amount B for given amount A
       const optimalAmountB = amountADesired.mul(reserveB).div(reserveA);
-
       // Calculate optimal amount A for given amount B
       const optimalAmountA = amountBDesired.mul(reserveA).div(reserveB);
 
-      // Choose the pair that uses the maximum amount of tokens without exceeding desired amounts
+      // Choose the pair that uses the maximum amount without exceeding desired amounts
       if (optimalAmountB.lte(amountBDesired)) {
-        // Use amountA as base, adjust amountB
         finalAmountA = amountADesired;
         finalAmountB = optimalAmountB;
-        console.log(
-          `Adjusted: A=${ethers.utils.formatEther(
-            finalAmountA
-          )}, B=${ethers.utils.formatEther(finalAmountB)}`
-        );
       } else {
-        // Use amountB as base, adjust amountA
         finalAmountA = optimalAmountA;
         finalAmountB = amountBDesired;
-        console.log(
-          `Adjusted: A=${ethers.utils.formatEther(
-            finalAmountA
-          )}, B=${ethers.utils.formatEther(finalAmountB)}`
-        );
       }
 
       // Notify user about the adjustment
@@ -1080,24 +1354,29 @@ async function addLiquidity() {
         `Amounts adjusted to pool ratio: ${parseFloat(
           ethers.utils.formatEther(finalAmountA)
         ).toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} TACC + ${parseFloat(
+          minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+          maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        })} ${CONSTANTS.TOKEN_NAMES.A} + ${parseFloat(
           ethers.utils.formatEther(finalAmountB)
         ).toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} TBCC`,
+          minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+          maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        })} ${CONSTANTS.TOKEN_NAMES.B}`,
         "info"
       );
     }
 
-    // Set slippage tolerance (5%)
-    const amountAMin = finalAmountA.mul(95).div(100);
-    const amountBMin = finalAmountB.mul(95).div(100);
+    // Set slippage tolerance
+    const amountAMin = finalAmountA
+      .mul(CONSTANTS.PERCENTAGE.SLIPPAGE_MULTIPLIER)
+      .div(CONSTANTS.PERCENTAGE.FULL);
+    const amountBMin = finalAmountB
+      .mul(CONSTANTS.PERCENTAGE.SLIPPAGE_MULTIPLIER)
+      .div(CONSTANTS.PERCENTAGE.FULL);
 
-    // Set deadline (10 minutes from now)
-    const deadline = Math.floor(Date.now() / 1000) + 600;
+    // Set deadline
+    const deadline =
+      Math.floor(Date.now() / 1000) + CONSTANTS.DEADLINE_MINUTES * 60;
 
     // Check token balances
     const balanceA = await contracts.tokenA.balanceOf(userAddress);
@@ -1169,7 +1448,6 @@ async function addLiquidity() {
 
     // Provide user-friendly error messages
     let errorMessage = error.message;
-
     if (error.message.includes("allowance")) {
       errorMessage =
         "Please approve tokens first by clicking 'Approve All Tokens'.";
@@ -1186,7 +1464,10 @@ async function addLiquidity() {
   }
 }
 
-// ===== REMOVE LIQUIDITY FUNCTIONS =====
+/**
+ * Removes liquidity from the pool
+ * @returns {Promise<void>}
+ */
 async function removeLiquidity() {
   if (!userAddress || !contracts.simpleSwap) {
     showNotification("Connect your wallet first", "error");
@@ -1234,12 +1515,17 @@ async function removeLiquidity() {
     const expectedAmountA = liquidityToRemove.mul(reserveA).div(totalSupply);
     const expectedAmountB = liquidityToRemove.mul(reserveB).div(totalSupply);
 
-    // Set slippage tolerance (5%)
-    const amountAMin = expectedAmountA.mul(95).div(100);
-    const amountBMin = expectedAmountB.mul(95).div(100);
+    // Set slippage tolerance
+    const amountAMin = expectedAmountA
+      .mul(CONSTANTS.PERCENTAGE.SLIPPAGE_MULTIPLIER)
+      .div(CONSTANTS.PERCENTAGE.FULL);
+    const amountBMin = expectedAmountB
+      .mul(CONSTANTS.PERCENTAGE.SLIPPAGE_MULTIPLIER)
+      .div(CONSTANTS.PERCENTAGE.FULL);
 
-    // Set deadline (10 minutes from now)
-    const deadline = Math.floor(Date.now() / 1000) + 600;
+    // Set deadline
+    const deadline =
+      Math.floor(Date.now() / 1000) + CONSTANTS.DEADLINE_MINUTES * 60;
 
     // Execute remove liquidity transaction
     const tx = await contracts.simpleSwap.removeLiquidity(
@@ -1277,6 +1563,10 @@ async function removeLiquidity() {
   }
 }
 
+/**
+ * Calculates and displays preview of remove liquidity operation
+ * @returns {Promise<void>}
+ */
 async function calculateRemoveLiquidityPreview() {
   if (
     !contracts.simpleSwap ||
@@ -1315,8 +1605,8 @@ async function calculateRemoveLiquidityPreview() {
       elements.previewAmountA.textContent = parseFloat(
         ethers.utils.formatEther(expectedAmountA)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
     }
 
@@ -1324,8 +1614,8 @@ async function calculateRemoveLiquidityPreview() {
       elements.previewAmountB.textContent = parseFloat(
         ethers.utils.formatEther(expectedAmountB)
       ).toLocaleString("en-US", {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
     }
   } catch (error) {
@@ -1333,140 +1623,18 @@ async function calculateRemoveLiquidityPreview() {
   }
 }
 
-// ===== EVENT HANDLERS =====
-function setupEvents() {
-  console.log("Setting up event listeners...");
+// ===== 13. ENTRY POINT =====
 
-  // Wallet connection button
-  if (elements.connectBtn) {
-    elements.connectBtn.addEventListener("click", () => {
-      if (userAddress) {
-        disconnect();
-      } else {
-        connect();
-      }
-    });
-  }
-
-  // Swap-related events
-  if (elements.amountFrom) {
-    elements.amountFrom.addEventListener("input", () => {
-      calculateSwap();
-      checkApproval();
-    });
-  }
-
-  if (elements.tokenFrom) {
-    elements.tokenFrom.addEventListener("change", () => {
-      calculateSwap();
-      checkApproval();
-    });
-  }
-
-  if (elements.tokenTo) {
-    elements.tokenTo.addEventListener("change", () => {
-      calculateSwap();
-      checkApproval();
-    });
-  }
-
-  if (elements.approveSwapBtn) {
-    elements.approveSwapBtn.addEventListener("click", approveToken);
-  }
-
-  if (elements.swapBtn) {
-    elements.swapBtn.addEventListener("click", executeSwap);
-  }
-
-  // Token minting events
-  if (elements.mintTokenA) {
-    elements.mintTokenA.addEventListener("click", mintTokenA);
-  }
-
-  if (elements.mintTokenB) {
-    elements.mintTokenB.addEventListener("click", mintTokenB);
-  }
-
-  // Token approval events
-  if (elements.approveAllBtn) {
-    elements.approveAllBtn.addEventListener("click", approveAllTokens);
-  }
-
-  // Price update events
-  if (elements.updatePricesBtn) {
-    elements.updatePricesBtn.addEventListener("click", updatePrices);
-  }
-
-  // Liquidity events
-  if (elements.addLiquidityBtn) {
-    elements.addLiquidityBtn.addEventListener("click", addLiquidity);
-  }
-
-  // === NUEVO: Autocompletado de campos de liquidez ===
-  if (elements.liquidityAmountA) {
-    elements.liquidityAmountA.addEventListener("input", async () => {
-      await autofillLiquidityFields("A");
-    });
-  }
-  if (elements.liquidityAmountB) {
-    elements.liquidityAmountB.addEventListener("input", async () => {
-      await autofillLiquidityFields("B");
-    });
-  }
-
-  // Remove liquidity events
-  if (elements.removeLiquidityBtn) {
-    elements.removeLiquidityBtn.addEventListener("click", removeLiquidity);
-  }
-
-  if (elements.removeLiquidityAmount) {
-    elements.removeLiquidityAmount.addEventListener(
-      "input",
-      calculateRemoveLiquidityPreview
-    );
-  }
-
-  // MetaMask events
-  if (window.ethereum) {
-    window.ethereum.on("accountsChanged", (accounts) => {
-      console.log("Accounts changed:", accounts);
-      if (accounts.length === 0) {
-        disconnect();
-      } else {
-        connect();
-      }
-    });
-
-    window.ethereum.on("chainChanged", () => {
-      console.log("Network changed");
-      window.location.reload();
-    });
-  }
-
-  console.log("Event listeners configured");
-}
-
-// ===== INITIALIZATION =====
-function initialize() {
-  console.log("Initializing application...");
-
-  // Verify ethers.js is loaded
-  if (typeof ethers === "undefined") {
-    console.error("ethers.js is not loaded");
-    alert("Error: ethers.js failed to load correctly. Please reload the page.");
-    return;
-  }
-
-  setupEvents();
-
-  console.log("Application initialized successfully");
-}
-
-// Initialize when DOM is ready
+/**
+ * Initialize when DOM is ready
+ */
 document.addEventListener("DOMContentLoaded", initialize);
 
-// Expose global functions for HTML usage
+// ===== 14. GLOBAL EXPOSURE =====
+
+/**
+ * Expose functions to global scope for HTML usage
+ */
 window.swapTokenAddress = swapAddress;
 window.closeNotification = closeNotification;
-
 window.calculateRealPrices = calculateRealPrices;
