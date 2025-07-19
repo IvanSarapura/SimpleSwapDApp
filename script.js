@@ -262,6 +262,18 @@ let contracts = {};
  */
 let isAutoFillingLiquidity = false;
 
+/**
+ * Array to store wallet interactions
+ * @type {Array}
+ */
+let walletInteractions = [];
+
+/**
+ * Maximum number of interactions to display
+ * @type {number}
+ */
+const MAX_INTERACTIONS = 50;
+
 // ===== 4. DOM ELEMENTS =====
 
 /**
@@ -315,6 +327,9 @@ const elements = {
   loadingIndicator: document.getElementById("loadingIndicator"),
   notification: document.getElementById("notification"),
   notificationMessage: document.getElementById("notificationMessage"),
+
+  // Wallet interactions elements
+  interactionsList: document.getElementById("interactionsList"),
 };
 
 // ===== 5. MAIN INITIALIZATION =====
@@ -335,6 +350,10 @@ function initialize() {
   }
 
   setupEvents();
+
+  // Initialize interactions display
+  updateInteractionsDisplay();
+
   console.log("Application initialized successfully");
 }
 
@@ -507,6 +526,158 @@ function closeNotification() {
   if (elements.notification) {
     elements.notification.classList.add("hidden");
   }
+}
+
+// ===== WALLET INTERACTIONS FUNCTIONS =====
+
+/**
+ * Adds a new wallet interaction to the list
+ * @param {string} walletAddress - The wallet address that performed the action
+ * @param {string} actionType - Type of action (approve, swap, add-liquidity, remove-liquidity)
+ * @param {string} details - Details about the interaction
+ * @param {string} amount - Amount involved in the interaction
+ * @param {string} txHash - Transaction hash for Etherscan link
+ * @returns {void}
+ */
+function addWalletInteraction(
+  walletAddress,
+  actionType,
+  details,
+  amount = "",
+  txHash = ""
+) {
+  const interaction = {
+    id: Date.now(),
+    walletAddress,
+    actionType,
+    details,
+    amount,
+    txHash,
+    timestamp: new Date().toLocaleString(),
+  };
+
+  // Add to the beginning of the array
+  walletInteractions.unshift(interaction);
+
+  // Keep only the latest interactions
+  if (walletInteractions.length > MAX_INTERACTIONS) {
+    walletInteractions = walletInteractions.slice(0, MAX_INTERACTIONS);
+  }
+
+  // Update the display
+  updateInteractionsDisplay();
+}
+
+/**
+ * Updates the interactions display in the UI
+ * @returns {void}
+ */
+function updateInteractionsDisplay() {
+  if (!elements.interactionsList) return;
+
+  if (walletInteractions.length === 0) {
+    elements.interactionsList.innerHTML = `
+      <div class="no-interactions">
+        <i class="fas fa-info-circle"></i>
+        <p>No interactions yet. Connect your wallet and start trading!</p>
+      </div>
+    `;
+    return;
+  }
+
+  const interactionsHTML = walletInteractions
+    .map((interaction) => {
+      const truncatedAddress = `${interaction.walletAddress.slice(
+        0,
+        6
+      )}...${interaction.walletAddress.slice(-4)}`;
+
+      // Get icon and color based on action type
+      const actionConfig = getActionConfig(interaction.actionType);
+
+      return `
+        <div class="interaction-item">
+          <div class="interaction-header">
+            <div class="action-badge">
+              <i class="${actionConfig.icon}"></i>
+              <span class="action-type ${
+                interaction.actionType
+              }">${interaction.actionType.replace("-", " ")}</span>
+            </div>
+            <span class="wallet-address">${truncatedAddress}</span>
+          </div>
+          <div class="interaction-time">
+            <i class="fas fa-clock"></i>
+            ${interaction.timestamp}
+          </div>
+          <div class="interaction-details">
+            ${
+              interaction.amount
+                ? `<div class="amount-display">
+                    <i class="fas fa-coins"></i>
+                    <span class="interaction-amount">${interaction.amount}</span>
+                   </div>`
+                : ""
+            }
+            ${
+              interaction.txHash
+                ? `<div class="transaction-link">
+                    <a href="https://sepolia.etherscan.io/tx/${interaction.txHash}" target="_blank" rel="noopener noreferrer">
+                      <i class="fas fa-external-link-alt"></i>
+                      View on Etherscan
+                    </a>
+                   </div>`
+                : ""
+            }
+          </div>
+        </div>
+      `;
+    })
+    .join("");
+
+  elements.interactionsList.innerHTML = interactionsHTML;
+}
+
+/**
+ * Gets configuration for action types (icons and colors)
+ * @param {string} actionType - Type of action
+ * @returns {Object} Configuration object with icon and color
+ */
+function getActionConfig(actionType) {
+  const configs = {
+    approve: {
+      icon: "fas fa-check-circle",
+      color: "#ffd700",
+    },
+    swap: {
+      icon: "fas fa-exchange-alt",
+      color: "#32cd32",
+    },
+    "add-liquidity": {
+      icon: "fas fa-plus-circle",
+      color: "#4169e1",
+    },
+    "remove-liquidity": {
+      icon: "fas fa-minus-circle",
+      color: "#dc143c",
+    },
+  };
+
+  return (
+    configs[actionType] || {
+      icon: "fas fa-info-circle",
+      color: "#8b9caf",
+    }
+  );
+}
+
+/**
+ * Formats wallet address for display
+ * @param {string} address - Full wallet address
+ * @returns {string} Formatted address
+ */
+function formatWalletAddress(address) {
+  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 // ===== 8. WALLET MANAGEMENT =====
@@ -847,6 +1018,23 @@ async function approveToken() {
     );
     await tx.wait();
 
+    // Add interaction record
+    const tokenName =
+      elements.tokenFrom.value === "tokenA" ? "Token A" : "Token B";
+    const amount = parseFloat(
+      ethers.utils.formatEther(amountIn)
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    addWalletInteraction(
+      userAddress,
+      "approve",
+      "",
+      `${amount} ${tokenName}`,
+      tx.hash
+    );
+
     // Update approval status
     await checkApproval();
     hideLoading();
@@ -895,6 +1083,32 @@ async function executeSwap() {
     );
 
     await tx.wait();
+
+    // Add interaction record
+    const tokenFromName =
+      elements.tokenFrom.value === "tokenA" ? "Token A" : "Token B";
+    const tokenToName =
+      elements.tokenTo.value === "tokenA" ? "Token A" : "Token B";
+    const amountInFormatted = parseFloat(
+      elements.amountFrom.value
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const amountOutFormatted = parseFloat(
+      elements.amountTo.value
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    addWalletInteraction(
+      userAddress,
+      "swap",
+      "",
+      `${amountInFormatted} ${tokenFromName} → ${amountOutFormatted} ${tokenToName}`,
+      tx.hash
+    );
 
     // Clear input fields
     if (elements.amountFrom) elements.amountFrom.value = "";
@@ -1434,6 +1648,28 @@ async function addLiquidity() {
 
     await tx.wait();
 
+    // Add interaction record
+    const amountAFormatted = parseFloat(
+      ethers.utils.formatEther(finalAmountA)
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const amountBFormatted = parseFloat(
+      ethers.utils.formatEther(finalAmountB)
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    addWalletInteraction(
+      userAddress,
+      "add-liquidity",
+      "",
+      `${amountAFormatted} Token A + ${amountBFormatted} Token B`,
+      tx.hash
+    );
+
     showNotification("Liquidity added successfully!", "success");
 
     // Clear input fields
@@ -1539,6 +1775,34 @@ async function removeLiquidity() {
     );
 
     await tx.wait();
+
+    // Add interaction record
+    const liquidityFormatted = parseFloat(
+      ethers.utils.formatEther(liquidityToRemove)
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const amountAFormatted = parseFloat(
+      ethers.utils.formatEther(expectedAmountA)
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const amountBFormatted = parseFloat(
+      ethers.utils.formatEther(expectedAmountB)
+    ).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+    addWalletInteraction(
+      userAddress,
+      "remove-liquidity",
+      "",
+      `${liquidityFormatted} LP → ${amountAFormatted} Token A + ${amountBFormatted} Token B`,
+      tx.hash
+    );
 
     showNotification("Liquidity removed successfully!", "success");
 

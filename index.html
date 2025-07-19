@@ -66,14 +66,6 @@
               </div>
             </div>
 
-            <!-- Token approval section for enabling swaps -->
-            <div class="card">
-              <h3>Approve Tokens</h3>
-              <button id="approveAllBtn" class="btn btn-secondary full-width">
-                <i class="fas fa-check-circle"></i> Approve All Tokens
-              </button>
-            </div>
-
             <!-- Liquidity provision interface -->
             <div class="card">
               <h3>Add Liquidity</h3>
@@ -100,6 +92,16 @@
               <button id="addLiquidityBtn" class="btn btn-success full-width">
                 <i class="fas fa-plus-circle"></i> Add Liquidity
               </button>
+            </div>
+
+            <!-- Wallet interactions activity feed -->
+            <div class="card interactions-card">
+              <h3>Wallet Interactions</h3>
+              <div class="interactions-container">
+                <div id="interactionsList" class="interactions-list">
+                  <!-- Interaction items will be dynamically added here -->
+                </div>
+              </div>
             </div>
           </div>
 
@@ -248,6 +250,14 @@
                   </div>
                 </div>
               </div>
+            </div>
+
+            <!-- Token approval section for enabling swaps -->
+            <div class="card">
+              <h3>Approve Tokens</h3>
+              <button id="approveAllBtn" class="btn btn-secondary full-width">
+                <i class="fas fa-check-circle"></i> Approve All Tokens
+              </button>
             </div>
 
             <!-- Live price feeds and liquidity pool information -->

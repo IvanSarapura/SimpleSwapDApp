@@ -1002,3 +1002,254 @@ select:focus {
   background: rgba(33, 38, 45, 0.8);
   border-color: rgba(210, 105, 30, 0.5);
 }
+
+/* ============================================
+   CARD DE INTERACCIONES DE WALLETS
+   ============================================ */
+
+/* Card de interacciones - Contenedor para mostrar actividad de wallets */
+.interactions-card {
+  margin-top: 0;
+  background: rgba(22, 27, 34, 0.9);
+  border: 1px solid rgba(210, 105, 30, 0.4);
+  border-radius: 1rem;
+  padding: 1.5rem;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+}
+
+.interactions-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px rgba(210, 105, 30, 0.3);
+}
+
+.interactions-card h3 {
+  color: #daa520;
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+/* Contenedor de interacciones - Área scrolleable para las interacciones */
+/*.interactions-container {
+  border-radius: 0.5rem;
+}*/
+
+/* Lista de interacciones - Contenedor para los items de interacción */
+.interactions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* Item de interacción individual - Cada entrada de actividad */
+.interaction-item {
+  background: rgba(33, 38, 45, 0.8);
+  border: 1px solid rgba(210, 105, 30, 0.2);
+  border-radius: 0.75rem;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  animation: fadeIn 0.5s ease-in-out;
+}
+
+.interaction-item:hover {
+  background: rgba(33, 38, 45, 0.9);
+  border-color: rgba(210, 105, 30, 0.4);
+}
+
+/* Header del item de interacción - Información principal */
+.interaction-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+}
+
+/* Badge de acción con icono */
+.action-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.action-badge i {
+  font-size: 0.875rem;
+}
+
+/* Tipo de acción - Badge con color según el tipo de interacción */
+.action-type {
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.action-type.approve {
+  background: linear-gradient(135deg, #ffd700, #daa520);
+  color: #1a1a1a;
+}
+
+.action-type.swap {
+  background: linear-gradient(135deg, #32cd32, #228b22);
+  color: #fff;
+}
+
+.action-type.add-liquidity {
+  background: linear-gradient(135deg, #4169e1, #1e90ff);
+  color: #fff;
+}
+
+.action-type.remove-liquidity {
+  background: linear-gradient(135deg, #dc143c, #b22222);
+  color: #fff;
+}
+
+/* Dirección de wallet - Formato truncado para mejor legibilidad */
+.wallet-address {
+  font-family: "Courier New", monospace;
+  font-size: 0.875rem;
+  color: #b8c5d6;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 0.25rem 0.5rem;
+  border-radius: 0.25rem;
+}
+
+/* Timestamp de la interacción */
+.interaction-time {
+  font-size: 0.75rem;
+  color: #8b9caf;
+  margin-bottom: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.interaction-time i {
+  font-size: 0.625rem;
+}
+
+/* Detalles de la interacción - Información específica según el tipo */
+.interaction-details {
+  font-size: 0.875rem;
+  color: #e6edf3;
+  line-height: 1.4;
+}
+
+/* Display de cantidad con icono */
+.amount-display {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(210, 105, 30, 0.1);
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(210, 105, 30, 0.3);
+}
+
+.amount-display i {
+  color: #daa520;
+  font-size: 0.875rem;
+}
+
+/* Cantidades en las interacciones - Destacadas visualmente */
+.interaction-amount {
+  font-weight: 600;
+  color: #daa520;
+}
+
+/* Link de transacción en Etherscan */
+.transaction-link {
+  margin-top: 0.5rem;
+}
+
+.transaction-link a {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4a9eff;
+  text-decoration: none;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.25rem 0.5rem;
+  background: rgba(74, 158, 255, 0.1);
+  border: 1px solid rgba(74, 158, 255, 0.3);
+  border-radius: 0.25rem;
+  transition: all 0.3s ease;
+}
+
+.transaction-link a:hover {
+  background: rgba(74, 158, 255, 0.2);
+  border-color: rgba(74, 158, 255, 0.5);
+  color: #6bb6ff;
+  transform: translateY(-1px);
+}
+
+.transaction-link i {
+  font-size: 0.625rem;
+}
+
+/* Mensaje cuando no hay interacciones */
+.no-interactions {
+  text-align: center;
+  color: #8b9caf;
+  font-style: italic;
+  padding: 2rem 1rem;
+}
+
+/* Scrollbar personalizado para la lista de interacciones */
+.interactions-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.interactions-list::-webkit-scrollbar-track {
+  background: rgba(33, 38, 45, 0.5);
+  border-radius: 3px;
+}
+
+.interactions-list::-webkit-scrollbar-thumb {
+  background: linear-gradient(135deg, #d2691e, #cd853f);
+  border-radius: 3px;
+}
+
+.interactions-list::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(135deg, #ff8c00, #daa520);
+}
+
+/* Responsive design para la card de interacciones */
+@media (max-width: 768px) {
+  .interactions-card {
+    margin-top: 1rem;
+    padding: 1rem;
+  }
+
+  .interactions-list {
+    max-height: 250px;
+  }
+
+  .interaction-item {
+    padding: 0.75rem;
+  }
+
+  .interaction-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .action-badge {
+    gap: 0.25rem;
+  }
+
+  .amount-display {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.25rem;
+  }
+}
