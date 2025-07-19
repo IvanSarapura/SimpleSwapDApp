@@ -1828,9 +1828,10 @@ async function addLiquidity() {
     if (elements.liquidityAmountA) elements.liquidityAmountA.value = "";
     if (elements.liquidityAmountB) elements.liquidityAmountB.value = "";
 
-    // Update balances and prices
+    // Update balances, prices, and LP supply
     await updateBalances();
     await updatePrices();
+    await updateLPSupply();
   } catch (error) {
     console.error("Error adding liquidity:", error);
 
@@ -1962,9 +1963,10 @@ async function removeLiquidity() {
     if (elements.removeLiquidityAmount)
       elements.removeLiquidityAmount.value = "";
 
-    // Update balances and prices
+    // Update balances, prices, and LP supply
     await updateBalances();
     await updatePrices();
+    await updateLPSupply();
     await calculateRemoveLiquidityPreview();
   } catch (error) {
     console.error("Error removing liquidity:", error);
