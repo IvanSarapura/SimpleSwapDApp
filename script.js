@@ -330,6 +330,9 @@ const elements = {
 
   // Wallet interactions elements
   interactionsList: document.getElementById("interactionsList"),
+
+  // LP Supply display element
+  totalLPSupplyDisplay: document.getElementById("totalLPSupplyDisplay"),
 };
 
 // ===== 5. MAIN INITIALIZATION =====
@@ -564,6 +567,9 @@ function addWalletInteraction(
     walletInteractions = walletInteractions.slice(0, MAX_INTERACTIONS);
   }
 
+  // Guardar en localStorage por wallet
+  saveInteractionsToStorage(walletAddress);
+
   // Update the display
   updateInteractionsDisplay();
 }
@@ -595,6 +601,34 @@ function updateInteractionsDisplay() {
       // Get icon and color based on action type
       const actionConfig = getActionConfig(interaction.actionType);
 
+      // Formatear el texto del amount con formato de columnas compacto
+      let formattedAmount = interaction.amount;
+      if (interaction.amount) {
+        if (interaction.actionType === "swap") {
+          // Formato de columnas compacto para swaps
+          const parts = interaction.amount.split(" → ");
+          if (parts.length === 2) {
+            formattedAmount = `From:   ${parts[0]}\nTo:        ${parts[1]}`;
+          }
+        } else if (interaction.actionType === "add-liquidity") {
+          // Formato de columnas compacto para add liquidity
+          const parts = interaction.amount.split(" + ");
+          if (parts.length === 2) {
+            formattedAmount = `From:   ${parts[0]}\n            ${parts[1]}\nTo:       LP`;
+          }
+        } else if (interaction.actionType === "remove-liquidity") {
+          // Formato de columnas compacto para remove liquidity
+          const parts = interaction.amount.split(" → ");
+          if (parts.length === 2) {
+            const fromPart = parts[0];
+            const toParts = parts[1].split(" + ");
+            if (toParts.length === 2) {
+              formattedAmount = `From:   ${fromPart}\nTo:       ${toParts[0]}\n            ${toParts[1]}`;
+            }
+          }
+        }
+      }
+
       return `
         <div class="interaction-item">
           <div class="interaction-header">
@@ -615,7 +649,7 @@ function updateInteractionsDisplay() {
               interaction.amount
                 ? `<div class="amount-display">
                     <i class="fas fa-coins"></i>
-                    <span class="interaction-amount">${interaction.amount}</span>
+                    <span class="interaction-amount">${formattedAmount}</span>
                    </div>`
                 : ""
             }
@@ -636,6 +670,14 @@ function updateInteractionsDisplay() {
     .join("");
 
   elements.interactionsList.innerHTML = interactionsHTML;
+
+  // Auto-scroll hacia arriba cuando se agregan nuevas interacciones
+  if (elements.interactionsList) {
+    // Usar requestAnimationFrame para un scroll más suave
+    requestAnimationFrame(() => {
+      elements.interactionsList.scrollTop = 0;
+    });
+  }
 }
 
 /**
@@ -705,6 +747,9 @@ async function connect() {
 
       console.log("Connected address:", userAddress);
 
+      // Cargar interacciones de esta wallet
+      loadInteractionsFromStorage(userAddress);
+
       // Update UI with connected wallet info
       if (elements.accountAddress) {
         elements.accountAddress.textContent = `Connected: ${userAddress.slice(
@@ -743,6 +788,10 @@ async function connect() {
       // Update balances and prices
       await updateBalances();
       await updatePrices();
+      await updateLPSupply();
+
+      // Mostrar interacciones cargadas
+      updateInteractionsDisplay();
 
       hideLoading();
       showNotification("Wallet connected successfully", "success");
@@ -769,6 +818,10 @@ function disconnect() {
   signer = null;
   userAddress = null;
   contracts = {};
+
+  // Limpiar solo la vista de interacciones (no borrar de localStorage)
+  walletInteractions = [];
+  updateInteractionsDisplay();
 
   // Update UI elements
   if (elements.accountAddress) {
@@ -1232,8 +1285,43 @@ async function updatePrices() {
     }
 
     console.log("Prices updated successfully");
+
+    // Update LP supply information
+    await updateLPSupply();
   } catch (error) {
     console.error("Error updating prices:", error);
+  }
+}
+
+/**
+ * Updates LP token supply information
+ * @returns {Promise<void>}
+ */
+async function updateLPSupply() {
+  if (!contracts.simpleSwap) {
+    console.log("Cannot update LP supply - missing contract");
+    return;
+  }
+
+  try {
+    console.log("Updating LP supply...");
+
+    // Get total supply from contract
+    const totalSupply = await contracts.simpleSwap.totalSupply();
+
+    // Update total supply display
+    if (elements.totalLPSupplyDisplay) {
+      elements.totalLPSupplyDisplay.textContent = parseFloat(
+        ethers.utils.formatEther(totalSupply)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+        maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
+      });
+    }
+
+    console.log("LP supply updated successfully");
+  } catch (error) {
+    console.error("Error updating LP supply:", error);
   }
 }
 
@@ -1884,6 +1972,50 @@ async function calculateRemoveLiquidityPreview() {
     }
   } catch (error) {
     console.error("Error calculating remove liquidity preview:", error);
+  }
+}
+
+/**
+ * Guarda las interacciones en localStorage para una wallet
+ */
+function saveInteractionsToStorage(walletAddress) {
+  try {
+    const key = `wallet_interactions_${walletAddress.toLowerCase()}`;
+    localStorage.setItem(key, JSON.stringify(walletInteractions));
+  } catch (error) {
+    console.error("Error saving interactions to localStorage:", error);
+  }
+}
+
+/**
+ * Carga las interacciones de localStorage para una wallet
+ */
+function loadInteractionsFromStorage(walletAddress) {
+  try {
+    const key = `wallet_interactions_${walletAddress.toLowerCase()}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      walletInteractions = JSON.parse(stored);
+    } else {
+      walletInteractions = [];
+    }
+  } catch (error) {
+    console.error("Error loading interactions from localStorage:", error);
+    walletInteractions = [];
+  }
+}
+
+/**
+ * Limpia las interacciones de una wallet en localStorage
+ */
+function clearInteractionsForWallet(walletAddress) {
+  try {
+    const key = `wallet_interactions_${walletAddress.toLowerCase()}`;
+    localStorage.removeItem(key);
+    walletInteractions = [];
+    updateInteractionsDisplay();
+  } catch (error) {
+    console.error("Error clearing interactions:", error);
   }
 }
 
