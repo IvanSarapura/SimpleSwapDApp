@@ -1294,7 +1294,35 @@ async function updatePrices() {
 }
 
 /**
- * Updates LP token supply information
+ * Forces a complete refresh of LP supply data
+ * @dev Can be called manually to force update
+ * @returns {Promise<void>}
+ */
+async function forceUpdateLPSupply() {
+  console.log("=== FORCE UPDATE LP SUPPLY ===");
+  console.log("Current user address:", userAddress);
+  console.log("Current provider:", provider);
+
+  try {
+    // Clear any potential cache
+    if (window.ethereum) {
+      console.log("Forcing MetaMask cache refresh...");
+      await window.ethereum.request({
+        method: "eth_getBlockByNumber",
+        params: ["latest", false],
+      });
+    }
+
+    await updateLPSupply();
+    console.log("Force update completed");
+  } catch (error) {
+    console.error("Error in force update:", error);
+  }
+}
+
+/**
+ * Updates LP Token Supply by getting the total supply from the contract
+ * @dev Forces a fresh blockchain read to avoid all cache issues
  * @returns {Promise<void>}
  */
 async function updateLPSupply() {
@@ -1306,22 +1334,58 @@ async function updateLPSupply() {
   try {
     console.log("Updating LP supply...");
 
-    // Get total supply from contract
-    const totalSupply = await contracts.simpleSwap.totalSupply();
+    // Force a completely fresh provider and contract instance
+    const freshProvider = new ethers.providers.Web3Provider(window.ethereum);
+
+    // Force provider to get latest block
+    await freshProvider.getNetwork();
+
+    const readOnlyContract = new ethers.Contract(
+      CONTRACT_ADDRESSES.SIMPLE_SWAP,
+      [
+        {
+          inputs: [],
+          name: "totalSupply",
+          outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+          stateMutability: "view",
+          type: "function",
+        },
+      ],
+      freshProvider
+    );
+
+    // Force a fresh call with explicit block number
+    const latestBlock = await freshProvider.getBlockNumber();
+    const totalSupply = await readOnlyContract.totalSupply({
+      blockTag: latestBlock,
+    });
+
+    console.log("Latest block:", latestBlock);
+    console.log("Raw totalSupply:", totalSupply.toString());
+    console.log(
+      "Formatted totalSupply:",
+      ethers.utils.formatEther(totalSupply)
+    );
 
     // Update total supply display
     if (elements.totalLPSupplyDisplay) {
-      elements.totalLPSupplyDisplay.textContent = parseFloat(
+      const formattedValue = parseFloat(
         ethers.utils.formatEther(totalSupply)
       ).toLocaleString("en-US", {
         minimumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
         maximumFractionDigits: CONSTANTS.DECIMAL_PLACES.BALANCE,
       });
+
+      console.log("Setting display to:", formattedValue);
+      elements.totalLPSupplyDisplay.textContent = formattedValue;
+    } else {
+      console.log("ERROR: totalLPSupplyDisplay element not found!");
     }
 
     console.log("LP supply updated successfully");
   } catch (error) {
     console.error("Error updating LP supply:", error);
+    console.error("Error details:", error.message);
   }
 }
 
@@ -2034,3 +2098,4 @@ document.addEventListener("DOMContentLoaded", initialize);
 window.swapTokenAddress = swapAddress;
 window.closeNotification = closeNotification;
 window.calculateRealPrices = calculateRealPrices;
+window.forceUpdateLPSupply = forceUpdateLPSupply;
