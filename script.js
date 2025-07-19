@@ -133,6 +133,113 @@ const CONTRACT_ABIS = {
       stateMutability: "view",
       type: "function",
     },
+    // Events
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: "address",
+          name: "tokenA",
+          type: "address",
+        },
+        {
+          indexed: true,
+          internalType: "address",
+          name: "tokenB",
+          type: "address",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amountA",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amountB",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "liquidity",
+          type: "uint256",
+        },
+      ],
+      name: "LiquidityAdded",
+      type: "event",
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: "address",
+          name: "tokenA",
+          type: "address",
+        },
+        {
+          indexed: true,
+          internalType: "address",
+          name: "tokenB",
+          type: "address",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amountA",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amountB",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "liquidity",
+          type: "uint256",
+        },
+      ],
+      name: "LiquidityRemoved",
+      type: "event",
+    },
+    {
+      anonymous: false,
+      inputs: [
+        {
+          indexed: true,
+          internalType: "address",
+          name: "tokenIn",
+          type: "address",
+        },
+        {
+          indexed: true,
+          internalType: "address",
+          name: "tokenOut",
+          type: "address",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amountIn",
+          type: "uint256",
+        },
+        {
+          indexed: false,
+          internalType: "uint256",
+          name: "amountOut",
+          type: "uint256",
+        },
+        { indexed: true, internalType: "address", name: "to", type: "address" },
+      ],
+      name: "Swap",
+      type: "event",
+    },
   ],
 
   TOKEN_A: [
@@ -223,7 +330,6 @@ const CONTRACT_ABIS = {
  * @constant {Object}
  */
 const CONSTANTS = {
-  SLIPPAGE_TOLERANCE: 5, // 5%
   DEADLINE_MINUTES: 10, // 10 minutes
   MINT_AMOUNT: "1000", // Default mint amount
   AUTO_HIDE_NOTIFICATION_MS: 5000, // 5 seconds
@@ -333,6 +439,7 @@ const elements = {
 
   // LP Supply display element
   totalLPSupplyDisplay: document.getElementById("totalLPSupplyDisplay"),
+  loadEventHistoryBtn: document.getElementById("loadEventHistoryBtn"),
 };
 
 // ===== 5. MAIN INITIALIZATION =====
@@ -428,6 +535,24 @@ function setupEvents() {
   // Data update events (prices, reserves, LP supply)
   if (elements.updateDataBtn) {
     elements.updateDataBtn.addEventListener("click", updateData);
+  }
+
+  // Event history loading
+  if (elements.loadEventHistoryBtn) {
+    elements.loadEventHistoryBtn.addEventListener("click", async () => {
+      showLoading();
+      try {
+        // Load events from last 1000 blocks
+        const currentBlock = await provider.getBlockNumber();
+        await fetchRecentEvents(currentBlock - 1000, currentBlock);
+        showNotification("Event history loaded successfully", "success");
+      } catch (error) {
+        console.error("Error loading event history:", error);
+        showNotification("Error loading event history", "error");
+      } finally {
+        hideLoading();
+      }
+    });
   }
 
   // Liquidity events
@@ -556,7 +681,15 @@ function addWalletInteraction(
     details,
     amount,
     txHash,
-    timestamp: new Date().toLocaleString(),
+    timestamp: new Date().toLocaleString("en-US", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }),
   };
 
   // Add to the beginning of the array
@@ -567,7 +700,7 @@ function addWalletInteraction(
     walletInteractions = walletInteractions.slice(0, MAX_INTERACTIONS);
   }
 
-  // Guardar en localStorage por wallet
+  // Save to localStorage per wallet
   saveInteractionsToStorage(walletAddress);
 
   // Update the display
@@ -601,29 +734,59 @@ function updateInteractionsDisplay() {
       // Get icon and color based on action type
       const actionConfig = getActionConfig(interaction.actionType);
 
-      // Formatear el texto del amount con formato de columnas compacto
+      // Format the amount text with compact column format and proper token names
       let formattedAmount = interaction.amount;
       if (interaction.amount) {
         if (interaction.actionType === "swap") {
-          // Formato de columnas compacto para swaps
+          // Compact column format for swaps with proper token names
           const parts = interaction.amount.split(" → ");
           if (parts.length === 2) {
-            formattedAmount = `From:   ${parts[0]}\nTo:        ${parts[1]}`;
+            // Extract amounts and determine token names
+            const fromAmount = parts[0].trim();
+            const toAmount = parts[1].trim();
+
+            // Determine token names based on amounts (this is a simplified approach)
+            // In a real implementation, you'd get this from the event data
+            const fromToken = fromAmount.includes("Token A")
+              ? "Token A"
+              : fromAmount.includes("Token B")
+              ? "Token B"
+              : "Token";
+            const toToken = toAmount.includes("Token A")
+              ? "Token A"
+              : toAmount.includes("Token B")
+              ? "Token B"
+              : "Token";
+
+            const cleanFromAmount = fromAmount.replace(/Token [AB]/, "").trim();
+            const cleanToAmount = toAmount.replace(/Token [AB]/, "").trim();
+
+            formattedAmount = `From:   ${cleanFromAmount} ${fromToken}\nTo:        ${cleanToAmount} ${toToken}`;
           }
         } else if (interaction.actionType === "add-liquidity") {
-          // Formato de columnas compacto para add liquidity
+          // Compact column format for add liquidity with proper token names
           const parts = interaction.amount.split(" + ");
           if (parts.length === 2) {
-            formattedAmount = `From:   ${parts[0]}\n            ${parts[1]}\nTo:       LP`;
+            const tokenAPart = parts[0].trim();
+            const tokenBPart = parts[1].trim();
+
+            const cleanTokenA = tokenAPart.replace(/Token A/, "").trim();
+            const cleanTokenB = tokenBPart.replace(/Token B/, "").trim();
+
+            formattedAmount = `From:   ${cleanTokenA} Token A\n            ${cleanTokenB} Token B\nTo:       LP`;
           }
         } else if (interaction.actionType === "remove-liquidity") {
-          // Formato de columnas compacto para remove liquidity
+          // Compact column format for remove liquidity with proper token names
           const parts = interaction.amount.split(" → ");
           if (parts.length === 2) {
-            const fromPart = parts[0];
+            const fromPart = parts[0].trim();
             const toParts = parts[1].split(" + ");
             if (toParts.length === 2) {
-              formattedAmount = `From:   ${fromPart}\nTo:       ${toParts[0]}\n            ${toParts[1]}`;
+              const cleanFrom = fromPart.replace(/LP/, "").trim();
+              const cleanTokenA = toParts[0].replace(/Token A/, "").trim();
+              const cleanTokenB = toParts[1].replace(/Token B/, "").trim();
+
+              formattedAmount = `From:   ${cleanFrom} LP\nTo:       ${cleanTokenA} Token A\n            ${cleanTokenB} Token B`;
             }
           }
         }
@@ -671,9 +834,9 @@ function updateInteractionsDisplay() {
 
   elements.interactionsList.innerHTML = interactionsHTML;
 
-  // Auto-scroll hacia arriba cuando se agregan nuevas interacciones
+  // Auto-scroll to top when new interactions are added
   if (elements.interactionsList) {
-    // Usar requestAnimationFrame para un scroll más suave
+    // Use requestAnimationFrame for smoother scrolling
     requestAnimationFrame(() => {
       elements.interactionsList.scrollTop = 0;
     });
@@ -713,15 +876,6 @@ function getActionConfig(actionType) {
   );
 }
 
-/**
- * Formats wallet address for display
- * @param {string} address - Full wallet address
- * @returns {string} Formatted address
- */
-function formatWalletAddress(address) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
-}
-
 // ===== 8. WALLET MANAGEMENT =====
 
 /**
@@ -747,7 +901,7 @@ async function connect() {
 
       console.log("Connected address:", userAddress);
 
-      // Cargar interacciones de esta wallet
+      // Load interactions for this wallet
       loadInteractionsFromStorage(userAddress);
 
       // Update UI with connected wallet info
@@ -790,8 +944,11 @@ async function connect() {
       await updateData();
       await updateLPSupply();
 
-      // Mostrar interacciones cargadas
+      // Show loaded interactions
       updateInteractionsDisplay();
+
+      // Set up contract event listeners
+      setupContractEventListeners();
 
       hideLoading();
       showNotification("Wallet connected successfully", "success");
@@ -819,7 +976,7 @@ function disconnect() {
   userAddress = null;
   contracts = {};
 
-  // Limpiar solo la vista de interacciones (no borrar de localStorage)
+  // Clear only the interactions view (don't delete from localStorage)
   walletInteractions = [];
   updateInteractionsDisplay();
 
@@ -841,6 +998,9 @@ function disconnect() {
   if (elements.balanceTokenB) elements.balanceTokenB.textContent = "0";
 
   showNotification("Wallet disconnected", "info");
+
+  // Clean up contract event listeners
+  cleanupContractEventListeners();
 }
 
 /**
@@ -1071,23 +1231,6 @@ async function approveToken() {
     );
     await tx.wait();
 
-    // Add interaction record
-    const tokenName =
-      elements.tokenFrom.value === "tokenA" ? "Token A" : "Token B";
-    const amount = parseFloat(
-      ethers.utils.formatEther(amountIn)
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-    addWalletInteraction(
-      userAddress,
-      "approve",
-      "",
-      `${amount} ${tokenName}`,
-      tx.hash
-    );
-
     // Update approval status
     await checkApproval();
     hideLoading();
@@ -1136,32 +1279,6 @@ async function executeSwap() {
     );
 
     await tx.wait();
-
-    // Add interaction record
-    const tokenFromName =
-      elements.tokenFrom.value === "tokenA" ? "Token A" : "Token B";
-    const tokenToName =
-      elements.tokenTo.value === "tokenA" ? "Token A" : "Token B";
-    const amountInFormatted = parseFloat(
-      elements.amountFrom.value
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-    const amountOutFormatted = parseFloat(
-      elements.amountTo.value
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-
-    addWalletInteraction(
-      userAddress,
-      "swap",
-      "",
-      `${amountInFormatted} ${tokenFromName} → ${amountOutFormatted} ${tokenToName}`,
-      tx.hash
-    );
 
     // Clear input fields
     if (elements.amountFrom) elements.amountFrom.value = "";
@@ -1800,28 +1917,6 @@ async function addLiquidity() {
 
     await tx.wait();
 
-    // Add interaction record
-    const amountAFormatted = parseFloat(
-      ethers.utils.formatEther(finalAmountA)
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-    const amountBFormatted = parseFloat(
-      ethers.utils.formatEther(finalAmountB)
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-
-    addWalletInteraction(
-      userAddress,
-      "add-liquidity",
-      "",
-      `${amountAFormatted} Token A + ${amountBFormatted} Token B`,
-      tx.hash
-    );
-
     showNotification("Liquidity added successfully!", "success");
 
     // Clear input fields
@@ -1929,34 +2024,6 @@ async function removeLiquidity() {
 
     await tx.wait();
 
-    // Add interaction record
-    const liquidityFormatted = parseFloat(
-      ethers.utils.formatEther(liquidityToRemove)
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-    const amountAFormatted = parseFloat(
-      ethers.utils.formatEther(expectedAmountA)
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-    const amountBFormatted = parseFloat(
-      ethers.utils.formatEther(expectedAmountB)
-    ).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    });
-
-    addWalletInteraction(
-      userAddress,
-      "remove-liquidity",
-      "",
-      `${liquidityFormatted} LP → ${amountAFormatted} Token A + ${amountBFormatted} Token B`,
-      tx.hash
-    );
-
     showNotification("Liquidity removed successfully!", "success");
 
     // Clear input field
@@ -2042,7 +2109,7 @@ async function calculateRemoveLiquidityPreview() {
 }
 
 /**
- * Guarda las interacciones en localStorage para una wallet
+ * Saves interactions to localStorage for a wallet
  */
 function saveInteractionsToStorage(walletAddress) {
   try {
@@ -2054,7 +2121,7 @@ function saveInteractionsToStorage(walletAddress) {
 }
 
 /**
- * Carga las interacciones de localStorage para una wallet
+ * Loads interactions from localStorage for a wallet
  */
 function loadInteractionsFromStorage(walletAddress) {
   try {
@@ -2071,21 +2138,313 @@ function loadInteractionsFromStorage(walletAddress) {
   }
 }
 
+// ===== 13. EVENT-BASED INTERACTIONS SYSTEM =====
+
 /**
- * Limpia las interacciones de una wallet en localStorage
+ * Sets up contract event listeners for real-time updates
+ * @returns {void}
  */
-function clearInteractionsForWallet(walletAddress) {
+function setupContractEventListeners() {
+  if (!contracts.simpleSwap) return;
+
+  console.log("Setting up contract event listeners...");
+
+  // Listen for Swap events
+  contracts.simpleSwap.on(
+    "Swap",
+    async (tokenIn, tokenOut, amountIn, amountOut, to, event) => {
+      console.log("Swap event detected:", {
+        tokenIn,
+        tokenOut,
+        amountIn: ethers.utils.formatEther(amountIn),
+        amountOut: ethers.utils.formatEther(amountOut),
+        to,
+      });
+
+      // Determine token names based on addresses
+      const tokenInName =
+        tokenIn.toLowerCase() === CONTRACT_ADDRESSES.TOKEN_A.toLowerCase()
+          ? "Token A"
+          : "Token B";
+      const tokenOutName =
+        tokenOut.toLowerCase() === CONTRACT_ADDRESSES.TOKEN_A.toLowerCase()
+          ? "Token A"
+          : "Token B";
+
+      // Add interaction record for the swap
+      const amountInFormatted = parseFloat(
+        ethers.utils.formatEther(amountIn)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountOutFormatted = parseFloat(
+        ethers.utils.formatEther(amountOut)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      addWalletInteraction(
+        to,
+        "swap",
+        "",
+        `${amountInFormatted} ${tokenInName} → ${amountOutFormatted} ${tokenOutName}`,
+        event.transactionHash
+      );
+
+      // Auto-update data when swap occurs
+      await updateData();
+      await updateBalances();
+
+      // Show notification for user's swaps
+      if (to.toLowerCase() === userAddress.toLowerCase()) {
+        showNotification("Swap completed successfully!", "success");
+      }
+    }
+  );
+
+  // Listen for LiquidityAdded events
+  contracts.simpleSwap.on(
+    "LiquidityAdded",
+    async (tokenA, tokenB, amountA, amountB, liquidity, event) => {
+      console.log("LiquidityAdded event detected:", {
+        tokenA,
+        tokenB,
+        amountA: ethers.utils.formatEther(amountA),
+        amountB: ethers.utils.formatEther(amountB),
+        liquidity: ethers.utils.formatEther(liquidity),
+      });
+
+      // Add interaction record for liquidity addition
+      const amountAFormatted = parseFloat(
+        ethers.utils.formatEther(amountA)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountBFormatted = parseFloat(
+        ethers.utils.formatEther(amountB)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      addWalletInteraction(
+        userAddress,
+        "add-liquidity",
+        "",
+        `${amountAFormatted} Token A + ${amountBFormatted} Token B`,
+        event.transactionHash
+      );
+
+      // Auto-update LP supply and data
+      await forceUpdateLPSupply();
+      await updateData();
+      await updateBalances();
+    }
+  );
+
+  // Listen for LiquidityRemoved events
+  contracts.simpleSwap.on(
+    "LiquidityRemoved",
+    async (tokenA, tokenB, amountA, amountB, liquidity, event) => {
+      console.log("LiquidityRemoved event detected:", {
+        tokenA,
+        tokenB,
+        amountA: ethers.utils.formatEther(amountA),
+        amountB: ethers.utils.formatEther(amountB),
+        liquidity: ethers.utils.formatEther(liquidity),
+      });
+
+      // Add interaction record for liquidity removal
+      const liquidityFormatted = parseFloat(
+        ethers.utils.formatEther(liquidity)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountAFormatted = parseFloat(
+        ethers.utils.formatEther(amountA)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountBFormatted = parseFloat(
+        ethers.utils.formatEther(amountB)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      addWalletInteraction(
+        userAddress,
+        "remove-liquidity",
+        "",
+        `${liquidityFormatted} LP → ${amountAFormatted} Token A + ${amountBFormatted} Token B`,
+        event.transactionHash
+      );
+
+      // Auto-update LP supply and data
+      await forceUpdateLPSupply();
+      await updateData();
+      await updateBalances();
+    }
+  );
+}
+
+/**
+ * Cleans up contract event listeners
+ * @returns {void}
+ */
+function cleanupContractEventListeners() {
+  if (!contracts.simpleSwap) return;
+
+  console.log("Cleaning up contract event listeners...");
+
+  // Remove all listeners
+  contracts.simpleSwap.removeAllListeners("Swap");
+  contracts.simpleSwap.removeAllListeners("LiquidityAdded");
+  contracts.simpleSwap.removeAllListeners("LiquidityRemoved");
+}
+
+/**
+ * Fetches and displays recent contract events
+ * @param {number} fromBlock - Starting block number
+ * @param {number} toBlock - Ending block number (optional)
+ * @returns {Promise<void>}
+ */
+async function fetchRecentEvents(fromBlock = 0, toBlock = "latest") {
+  if (!contracts.simpleSwap) return;
+
   try {
-    const key = `wallet_interactions_${walletAddress.toLowerCase()}`;
-    localStorage.removeItem(key);
-    walletInteractions = [];
-    updateInteractionsDisplay();
+    console.log("Fetching recent contract events...");
+
+    // Get recent Swap events
+    const swapEvents = await contracts.simpleSwap.queryFilter(
+      contracts.simpleSwap.filters.Swap(),
+      fromBlock,
+      toBlock
+    );
+
+    // Get recent LiquidityAdded events
+    const liquidityAddedEvents = await contracts.simpleSwap.queryFilter(
+      contracts.simpleSwap.filters.LiquidityAdded(),
+      fromBlock,
+      toBlock
+    );
+
+    // Get recent LiquidityRemoved events
+    const liquidityRemovedEvents = await contracts.simpleSwap.queryFilter(
+      contracts.simpleSwap.filters.LiquidityRemoved(),
+      fromBlock,
+      toBlock
+    );
+
+    console.log("Recent events found:", {
+      swaps: swapEvents.length,
+      liquidityAdded: liquidityAddedEvents.length,
+      liquidityRemoved: liquidityRemovedEvents.length,
+    });
+
+    // Process events and add to interactions
+    swapEvents.forEach((event) => {
+      const { tokenIn, tokenOut, amountIn, amountOut, to } = event.args;
+
+      // Determine token names based on addresses
+      const tokenInName =
+        tokenIn.toLowerCase() === CONTRACT_ADDRESSES.TOKEN_A.toLowerCase()
+          ? "Token A"
+          : "Token B";
+      const tokenOutName =
+        tokenOut.toLowerCase() === CONTRACT_ADDRESSES.TOKEN_A.toLowerCase()
+          ? "Token A"
+          : "Token B";
+
+      const amountInFormatted = parseFloat(
+        ethers.utils.formatEther(amountIn)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountOutFormatted = parseFloat(
+        ethers.utils.formatEther(amountOut)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      addWalletInteraction(
+        to,
+        "swap",
+        "",
+        `${amountInFormatted} ${tokenInName} → ${amountOutFormatted} ${tokenOutName}`,
+        event.transactionHash
+      );
+    });
+
+    liquidityAddedEvents.forEach((event) => {
+      const { tokenA, tokenB, amountA, amountB, liquidity } = event.args;
+      const amountAFormatted = parseFloat(
+        ethers.utils.formatEther(amountA)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountBFormatted = parseFloat(
+        ethers.utils.formatEther(amountB)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      addWalletInteraction(
+        userAddress,
+        "add-liquidity",
+        "",
+        `${amountAFormatted} Token A + ${amountBFormatted} Token B`,
+        event.transactionHash
+      );
+    });
+
+    liquidityRemovedEvents.forEach((event) => {
+      const { tokenA, tokenB, amountA, amountB, liquidity } = event.args;
+      const liquidityFormatted = parseFloat(
+        ethers.utils.formatEther(liquidity)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountAFormatted = parseFloat(
+        ethers.utils.formatEther(amountA)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+      const amountBFormatted = parseFloat(
+        ethers.utils.formatEther(amountB)
+      ).toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+
+      addWalletInteraction(
+        userAddress,
+        "remove-liquidity",
+        "",
+        `${liquidityFormatted} LP → ${amountAFormatted} Token A + ${amountBFormatted} Token B`,
+        event.transactionHash
+      );
+    });
+
+    showNotification("Event history loaded successfully", "success");
   } catch (error) {
-    console.error("Error clearing interactions:", error);
+    console.error("Error fetching recent events:", error);
+    showNotification("Error loading event history", "error");
   }
 }
 
-// ===== 13. ENTRY POINT =====
+// ===== 14. ENTRY POINT =====
 
 /**
  * Initialize when DOM is ready
@@ -2101,3 +2460,20 @@ window.swapTokenAddress = swapAddress;
 window.closeNotification = closeNotification;
 window.calculateRealPrices = calculateRealPrices;
 window.forceUpdateLPSupply = forceUpdateLPSupply;
+
+// Additional global functions for debugging (available in browser console)
+// Usage: refreshLPSupply(), refreshAllData(), loadEventHistory()
+window.refreshLPSupply = async () => {
+  console.log("Manual LP Supply refresh triggered");
+  await forceUpdateLPSupply();
+};
+
+window.refreshAllData = async () => {
+  console.log("Manual full data refresh triggered");
+  await updateData();
+};
+
+window.loadEventHistory = async () => {
+  console.log("Manual event history load triggered");
+  await fetchRecentEvents();
+};
