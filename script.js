@@ -298,7 +298,7 @@ const elements = {
   approveSwapBtn: document.getElementById("approveSwapBtn"),
   swapBtn: document.getElementById("swapBtn"),
 
-  // Price display elements
+  // Data display elements (prices and reserves)
   priceTokenA: document.getElementById("priceTokenA"),
   priceTokenB: document.getElementById("priceTokenB"),
   reserveTokenA: document.getElementById("reserveTokenA"),
@@ -308,7 +308,7 @@ const elements = {
   mintTokenA: document.getElementById("mintTokenA"),
   mintTokenB: document.getElementById("mintTokenB"),
   approveAllBtn: document.getElementById("approveAllBtn"),
-  updatePricesBtn: document.getElementById("updatePricesBtn"),
+  updateDataBtn: document.getElementById("updateDataBtn"),
   currentPrice: document.getElementById("currentPrice"),
 
   // Liquidity elements
@@ -425,9 +425,9 @@ function setupEvents() {
     elements.approveAllBtn.addEventListener("click", approveAllTokens);
   }
 
-  // Price update events
-  if (elements.updatePricesBtn) {
-    elements.updatePricesBtn.addEventListener("click", updatePrices);
+  // Data update events (prices, reserves, LP supply)
+  if (elements.updateDataBtn) {
+    elements.updateDataBtn.addEventListener("click", updateData);
   }
 
   // Liquidity events
@@ -785,9 +785,9 @@ async function connect() {
 
       console.log("Contracts initialized");
 
-      // Update balances and prices
+      // Update balances and data
       await updateBalances();
-      await updatePrices();
+      await updateData();
       await updateLPSupply();
 
       // Mostrar interacciones cargadas
@@ -1168,9 +1168,9 @@ async function executeSwap() {
     if (elements.amountTo) elements.amountTo.value = "";
     if (elements.receiveAmount) elements.receiveAmount.textContent = "0";
 
-    // Update balances and prices
+    // Update balances and data
     await updateBalances();
-    await updatePrices();
+    await updateData();
 
     hideLoading();
     showNotification("Swap executed successfully", "success");
@@ -1207,14 +1207,14 @@ function swapAddress() {
 // ===== 10. PRICE FUNCTIONS =====
 
 /**
- * Updates price displays and reserve information
+ * Updates data displays including prices, reserves, and LP supply
  * @returns {Promise<void>}
  */
-async function updatePrices() {
+async function updateData() {
   if (!contracts.simpleSwap) return;
 
   try {
-    console.log("Updating prices and reserves...");
+    console.log("Updating data (prices, reserves, and LP supply)...");
 
     // Get current reserves from the contract
     const [reserveA, reserveB] = await contracts.simpleSwap.getReserves(
@@ -1284,7 +1284,7 @@ async function updatePrices() {
         elements.currentPrice.textContent = "Price: No liquidity";
     }
 
-    console.log("Prices updated successfully");
+    console.log("Data updated successfully");
 
     // Update LP supply information
     await updateLPSupply();
@@ -1828,9 +1828,9 @@ async function addLiquidity() {
     if (elements.liquidityAmountA) elements.liquidityAmountA.value = "";
     if (elements.liquidityAmountB) elements.liquidityAmountB.value = "";
 
-    // Update balances, prices, and LP supply
+    // Update balances, data, and LP supply
     await updateBalances();
-    await updatePrices();
+    await updateData();
     await updateLPSupply();
   } catch (error) {
     console.error("Error adding liquidity:", error);
@@ -1963,9 +1963,9 @@ async function removeLiquidity() {
     if (elements.removeLiquidityAmount)
       elements.removeLiquidityAmount.value = "";
 
-    // Update balances, prices, and LP supply
+    // Update balances, data, and LP supply
     await updateBalances();
-    await updatePrices();
+    await updateData();
     await updateLPSupply();
     await calculateRemoveLiquidityPreview();
   } catch (error) {

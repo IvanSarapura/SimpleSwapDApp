@@ -103,6 +103,25 @@ body {
   border: 1px solid rgba(210, 105, 30, 0.4);
 }
 
+/* Botón de datos - Trigger para actualizar precios, reservas y suministro LP con colores distintivos
+   para diferenciarlo de otros botones de acción */
+.data-btn {
+  background: linear-gradient(135deg, #2f4f4f, #4682b4);
+  color: #e6edf3;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  font-size: 0.875rem;
+}
+
+.data-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(70, 130, 180, 0.4);
+}
+
 /* Botón de precios - Trigger para actualizar precios con colores distintivos
    para diferenciarlo de otros botones de acción */
 .price-btn {

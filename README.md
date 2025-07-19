@@ -199,13 +199,17 @@ The project consists of three main smart contracts:
 - **DEX Operations**: Swapping and liquidity management
 - **Price Display**: Real-time price feeds and reserve information
 - **Responsive Design**: Mobile-first approach with modern UI
+- **Wallet Interactions**: Complete transaction history with localStorage persistence
+- **Data Management**: Fresh blockchain reads with cache clearing for accurate data
 
 #### User Experience
 
 - **Loading States**: Visual feedback during transactions
 - **Error Handling**: Comprehensive error messages and recovery guidance
 - **Real-time Updates**: Automatic balance and price updates
-- **Slippage Protection**: 5% default slippage tolerance for liquidity operations
+- **Transaction History**: Complete wallet interaction tracking with Etherscan links
+- **Data Persistence**: Interactions saved per wallet address in localStorage
+- **Cache Management**: Fresh blockchain reads to ensure data accuracy
 
 ### Blockchain Integration Functions
 
@@ -228,23 +232,41 @@ The project consists of three main smart contracts:
 - `addLiquidity()`: Calls `addLiquidity()` contract function with 5% slippage protection, validates positive amounts
 - `removeLiquidity()`: Calls `removeLiquidity()` contract function with 5% slippage protection, validates LP token balance
 - `calculateRemoveLiquidityPreview()`: Estimates withdrawal amounts using pool reserves and total supply (view only)
+- `autofillLiquidityFields()`: Automatically calculates optimal token ratios based on current pool reserves
 
 #### Token Management
 
 - `mintTokenA()/mintTokenB()`: Calls `mint()` function to mint 1000 tokens (owner only), updates UI with loading states
 - `approveAllTokens()`: Sets maximum allowance (`MaxUint256`) for both tokens to SimpleSwap contract
 
-#### Price and Reserve Functions
+#### Wallet Interactions System
 
-- `updatePrices()`: Fetches current reserves using `getReserves()`, calculates and displays exchange rates
-- Real-time price updates in navigation bar showing Token A to Token B ratio
+- `addWalletInteraction()`: Records wallet interactions with timestamps, transaction hashes, and formatted amounts
+- `updateInteractionsDisplay()`: Renders interaction history with action badges, wallet addresses, and Etherscan links
+- `saveInteractionsToStorage()`: Persists interactions in localStorage per wallet address
+- `loadInteractionsFromStorage()`: Loads interaction history when wallet connects
+- Supports up to 50 interactions with automatic cleanup and localStorage persistence
+
+#### Data Update Functions
+
+- `updateData()`: Fetches current reserves using `getReserves()`, calculates and displays exchange rates, calls `updateLPSupply()` for LP token supply
+- `updateLPSupply()`: Fetches LP token supply using `totalSupply()` function with fresh blockchain reads to avoid cache issues
+- `forceUpdateLPSupply()`: Forces complete refresh of LP supply data with cache clearing
+- `calculateRealPrices()`: Calculates accurate prices using `getAmountOut()` for 1 token standard amounts
+- Real-time data updates in navigation bar showing Token A to Token B ratio
 
 #### Contract Interaction Map
 
 **Core Contract Calls:**
 
-- `SimpleSwap`: `getReserves()`, `getAmountOut()`, `swapExactTokensForTokens()`, `addLiquidity()`, `removeLiquidity()`, `balanceOf()`
+- `SimpleSwap`: `getReserves()`, `getAmountOut()`, `swapExactTokensForTokens()`, `addLiquidity()`, `removeLiquidity()`, `balanceOf()`, `totalSupply()`
 - `TokenA/TokenB`: `balanceOf()`, `allowance()`, `approve()`, `mint()`
+
+**Utility Functions:**
+
+- `showLoading()` / `hideLoading()`: Visual feedback during transactions
+- `showNotification()`: Toast notifications with auto-hide and multiple types (success, error, info, warning)
+- `closeNotification()`: Manual notification dismissal
 
 **Transaction Flow:**
 
@@ -260,6 +282,7 @@ The project consists of three main smart contracts:
 - Transaction rejection handling
 - Contract revert messages display
 - Network validation and switching
+- Insufficient balance and allowance errors
 
 ---
 
