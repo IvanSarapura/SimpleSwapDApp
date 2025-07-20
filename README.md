@@ -33,6 +33,8 @@ SimpleSwap is a decentralized exchange (DEX) implementation built on Ethereum th
 - **Token Swapping** with real-time price calculations and slippage protection
 - **ERC20 Token Management** with minting capabilities for testing
 - **Modern Web3 Frontend** with MetaMask integration and responsive design
+- **Event-Driven Architecture** with real-time blockchain event monitoring
+- **Advanced Interaction Tracking** with duplicate prevention and localStorage persistence
 
 ### Key Features
 
@@ -42,6 +44,8 @@ SimpleSwap is a decentralized exchange (DEX) implementation built on Ethereum th
 - **Deadline Protection**: Transaction expiration timestamps prevent stale trades
 - **Token Sorting**: Consistent token pair ordering prevents duplicate pools
 - **Comprehensive Testing**: Function coverage with edge cases and access control
+- **Real-Time Event Monitoring**: Automatic detection of swaps and liquidity operations
+- **Smart Interaction Management**: Duplicate prevention and wallet-specific history
 
 ---
 
@@ -83,6 +87,12 @@ SimpleSwap is a decentralized exchange (DEX) implementation built on Ethereum th
 - Enter the amount of LP tokens to remove
 - Preview shows the tokens you'll receive
 - Click "Remove Liquidity" to get back your tokens
+
+### 7. View Wallet Interactions
+
+- **Real-Time Tracking**: All transactions are automatically detected and displayed
+- **Transaction Details**: View amounts, timestamps, and Etherscan links
+- **Duplicate Prevention**: System automatically prevents duplicate entries
 
 ---
 
@@ -139,6 +149,14 @@ The project consists of three main smart contracts:
 | `getAmountOut()`             | Calculates output amount          | View Function |
 | `getReserves()`              | Returns current reserves          | View Function |
 | `getPrice()`                 | Returns current token price       | View Function |
+
+#### Contract Events
+
+| Event              | Parameters                                    | Description                       |
+| ------------------ | --------------------------------------------- | --------------------------------- |
+| `Swap`             | `tokenIn, tokenOut, amountIn, amountOut, to`  | Emitted when tokens are swapped   |
+| `LiquidityAdded`   | `tokenA, tokenB, amountA, amountB, liquidity` | Emitted when liquidity is added   |
+| `LiquidityRemoved` | `tokenA, tokenB, amountA, amountB, liquidity` | Emitted when liquidity is removed |
 
 #### Key Implementation Details
 
@@ -199,7 +217,8 @@ The project consists of three main smart contracts:
 - **DEX Operations**: Swapping and liquidity management
 - **Price Display**: Real-time price feeds and reserve information
 - **Responsive Design**: Mobile-first approach with modern UI
-- **Wallet Interactions**: Complete transaction history with localStorage persistence
+- **Event-Driven Architecture**: Real-time blockchain event monitoring
+- **Advanced Interaction Management**: Smart duplicate prevention and localStorage persistence
 - **Data Management**: Fresh blockchain reads with cache clearing for accurate data
 
 #### User Experience
@@ -210,13 +229,105 @@ The project consists of three main smart contracts:
 - **Transaction History**: Complete wallet interaction tracking with Etherscan links
 - **Data Persistence**: Interactions saved per wallet address in localStorage
 - **Cache Management**: Fresh blockchain reads to ensure data accuracy
+- **24-Hour Time Format**: All timestamps displayed in 24-hour format
+
+### Event-Driven System
+
+The application implements an event-driven architecture that automatically detects and tracks all blockchain interactions:
+
+#### Event Listener Setup
+
+```javascript
+// Automatic event listener setup on wallet connection
+setupContractEventListeners();
+
+// Event listener cleanup on wallet disconnect
+cleanupContractEventListeners();
+
+// Fetch historical events from blockchain
+fetchRecentEvents(fromBlock, toBlock);
+```
+
+#### Supported Events
+
+| Event Type           | Contract Event     | Description           |
+| -------------------- | ------------------ | --------------------- |
+| **Swap**             | `Swap`             | Token swap operations |
+| **Add Liquidity**    | `LiquidityAdded`   | Liquidity provision   |
+| **Remove Liquidity** | `LiquidityRemoved` | Liquidity removal     |
+
+#### Smart Event Processing
+
+**Duplicate Prevention**:
+
+- Transaction hash-based duplicate detection
+- Wallet connection verification before processing
+- Automatic cleanup on disconnect
+
+**Real-Time Features**:
+
+- Automatic interaction recording
+- Real-time UI updates
+- Balance and data refresh on events
+- Notification system for user transactions
+
+#### Historical Event Loading
+
+```javascript
+// Load recent events from blockchain
+fetchRecentEvents(fromBlock, toBlock);
+
+// Manual event history loading via UI
+// Click "Load Event History" button
+```
+
+**Features**:
+
+- Configurable block range (default: last 1000 blocks)
+- Automatic interaction population
+- Error handling and user feedback
+- Loading states and progress indicators
+
+### Interaction Display Format
+
+The system displays interactions in a structured format with proper token names:
+
+**Swap Operations**:
+
+```
+From:   1,000.00 Token A
+To:     1,050.00 Token B
+```
+
+**Add Liquidity**:
+
+```
+From:   1,000.00 Token A
+        1,000.00 Token B
+To:     LP
+```
+
+**Remove Liquidity**:
+
+```
+From:   1,638.96 LP
+To:     1,678.59 Token A
+        1,600.26 Token B
+```
+
+### Time Format
+
+All timestamps are displayed in **24-hour format** for better readability:
+
+- **Format**: `MM/DD/YYYY, HH:MM:SS`
+- **Example**: `12/15/2023, 14:30:45`
 
 ### Blockchain Integration Functions
 
 #### Wallet Management
 
 - `connect()`: Initializes Web3Provider with MetaMask, creates contract instances, sets up event listeners
-- `disconnect()`: Resets global variables, clears UI state, disconnects from blockchain
+- `disconnect()`: Resets global variables, clears UI state, disconnects from blockchain, cleans up event listeners
 - `updateBalances()`: Fetches token balances (TokenA, TokenB, LP) from contracts and updates UI display
 
 #### Swap Operations
@@ -241,10 +352,11 @@ The project consists of three main smart contracts:
 
 #### Wallet Interactions System
 
-- `addWalletInteraction()`: Records wallet interactions with timestamps, transaction hashes, and formatted amounts
+- `addWalletInteraction()`: Records wallet interactions with timestamps, transaction hashes, and formatted amounts with duplicate prevention
 - `updateInteractionsDisplay()`: Renders interaction history with action badges, wallet addresses, and Etherscan links
 - `saveInteractionsToStorage()`: Persists interactions in localStorage per wallet address
 - `loadInteractionsFromStorage()`: Loads interaction history when wallet connects
+- `fetchRecentEvents()`: Loads historical blockchain events to populate interaction history
 - Supports up to 50 interactions with automatic cleanup and localStorage persistence
 
 #### Data Update Functions
@@ -257,32 +369,40 @@ The project consists of three main smart contracts:
 
 #### Contract Interaction Map
 
-**Core Contract Calls:**
+**Core Contract Calls**:
 
 - `SimpleSwap`: `getReserves()`, `getAmountOut()`, `swapExactTokensForTokens()`, `addLiquidity()`, `removeLiquidity()`, `balanceOf()`, `totalSupply()`
 - `TokenA/TokenB`: `balanceOf()`, `allowance()`, `approve()`, `mint()`
 
-**Utility Functions:**
+**Event Monitoring**:
+
+- `Swap`: Real-time swap event detection with automatic interaction recording
+- `LiquidityAdded`: Automatic liquidity addition tracking
+- `LiquidityRemoved`: Automatic liquidity removal tracking
+
+**Utility Functions**:
 
 - `showLoading()` / `hideLoading()`: Visual feedback during transactions
 - `showNotification()`: Toast notifications with auto-hide and multiple types (success, error, info, warning)
 - `closeNotification()`: Manual notification dismissal
 
-**Transaction Flow:**
+**Transaction Flow**:
 
 1. **User Input** → Basic validation (amount > 0, sufficient balance)
 2. **Approval Check** → `allowance()` vs required amount
 3. **Contract Call** → Direct smart contract interaction with proper parameters
 4. **Transaction Wait** → `await tx.wait()` for confirmation
-5. **UI Update** → Balance refresh, notification display, loading state management
+5. **Event Detection** → Automatic event listener processing
+6. **UI Update** → Balance refresh, notification display, loading state management
 
-**Error Handling:**
+**Error Handling**:
 
 - MetaMask detection and connection errors
 - Transaction rejection handling
 - Contract revert messages display
 - Network validation and switching
 - Insufficient balance and allowance errors
+- Event listener cleanup and error recovery
 
 ---
 
@@ -307,7 +427,7 @@ test/
 
 **Primary test file covering complete SimpleSwap contract functionality**
 
-**Test Categories:**
+**Test Categories**:
 
 - **Input Validation Tests** (3 tests)
 
@@ -336,7 +456,7 @@ test/
 
 **Access control tests for token contracts**
 
-**Test Categories:**
+**Test Categories**:
 
 - **Access Control Tests** (2 tests)
   - TokenA mint function - owner-only access with `OwnableUnauthorizedAccount` error
@@ -439,6 +559,15 @@ Common errors that may occur when interacting with the contracts:
 | `"Low liquidity"`                 | Trying to mint zero LP tokens | Provide non-zero amounts            |
 | `"Invalid reserves"`              | Pool reserves are zero        | Ensure pool is properly initialized |
 | `"Zero amount"`                   | Input amount is zero          | Enter valid amount > 0              |
+
+### Frontend-Specific Errors
+
+| Error Type                   | Cause                                     | Solution                            |
+| ---------------------------- | ----------------------------------------- | ----------------------------------- |
+| **Event Listener Errors**    | Contract events not found in ABI          | Ensure events are included in ABI   |
+| **Duplicate Interactions**   | Same transaction processed multiple times | Duplicate prevention system active  |
+| **Wallet Connection Issues** | MetaMask not installed or wrong network   | Install MetaMask, switch to Sepolia |
+| **Cache Issues**             | Stale blockchain data                     | Use "Update Data" button            |
 
 ---
 
