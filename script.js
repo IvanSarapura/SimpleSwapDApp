@@ -674,6 +674,21 @@ function addWalletInteraction(
   amount = "",
   txHash = ""
 ) {
+  // Don't add interactions if no wallet is connected
+  if (!userAddress) {
+    console.log("Skipping interaction - no wallet connected");
+    return;
+  }
+
+  // Check for duplicates based on transaction hash
+  if (
+    txHash &&
+    walletInteractions.some((interaction) => interaction.txHash === txHash)
+  ) {
+    console.log("Skipping duplicate interaction for txHash:", txHash);
+    return;
+  }
+
   const interaction = {
     id: Date.now(),
     walletAddress,
@@ -901,6 +916,9 @@ async function connect() {
 
       console.log("Connected address:", userAddress);
 
+      // Clear any existing interactions first to prevent duplicates
+      walletInteractions = [];
+
       // Load interactions for this wallet
       loadInteractionsFromStorage(userAddress);
 
@@ -970,15 +988,27 @@ async function connect() {
 function disconnect() {
   console.log("Disconnecting wallet...");
 
+  // Clean up contract event listeners first to prevent new interactions
+  cleanupContractEventListeners();
+
   // Reset global variables
   provider = null;
   signer = null;
   userAddress = null;
   contracts = {};
 
-  // Clear only the interactions view (don't delete from localStorage)
+  // Clear interactions array and display
   walletInteractions = [];
-  updateInteractionsDisplay();
+
+  // Clear the interactions display completely
+  if (elements.interactionsList) {
+    elements.interactionsList.innerHTML = `
+      <div class="no-interactions">
+        <i class="fas fa-info-circle"></i>
+        <p>No interactions yet. Connect your wallet and start trading!</p>
+      </div>
+    `;
+  }
 
   // Update UI elements
   if (elements.accountAddress) {
@@ -998,9 +1028,6 @@ function disconnect() {
   if (elements.balanceTokenB) elements.balanceTokenB.textContent = "0";
 
   showNotification("Wallet disconnected", "info");
-
-  // Clean up contract event listeners
-  cleanupContractEventListeners();
 }
 
 /**
@@ -2161,6 +2188,12 @@ function setupContractEventListeners() {
         to,
       });
 
+      // Only process if wallet is connected
+      if (!userAddress) {
+        console.log("Skipping swap event - no wallet connected");
+        return;
+      }
+
       // Determine token names based on addresses
       const tokenInName =
         tokenIn.toLowerCase() === CONTRACT_ADDRESSES.TOKEN_A.toLowerCase()
@@ -2216,6 +2249,12 @@ function setupContractEventListeners() {
         liquidity: ethers.utils.formatEther(liquidity),
       });
 
+      // Only process if wallet is connected
+      if (!userAddress) {
+        console.log("Skipping liquidity added event - no wallet connected");
+        return;
+      }
+
       // Add interaction record for liquidity addition
       const amountAFormatted = parseFloat(
         ethers.utils.formatEther(amountA)
@@ -2256,6 +2295,12 @@ function setupContractEventListeners() {
         amountB: ethers.utils.formatEther(amountB),
         liquidity: ethers.utils.formatEther(liquidity),
       });
+
+      // Only process if wallet is connected
+      if (!userAddress) {
+        console.log("Skipping liquidity removed event - no wallet connected");
+        return;
+      }
 
       // Add interaction record for liquidity removal
       const liquidityFormatted = parseFloat(
@@ -2460,20 +2505,3 @@ window.swapTokenAddress = swapAddress;
 window.closeNotification = closeNotification;
 window.calculateRealPrices = calculateRealPrices;
 window.forceUpdateLPSupply = forceUpdateLPSupply;
-
-// Additional global functions for debugging (available in browser console)
-// Usage: refreshLPSupply(), refreshAllData(), loadEventHistory()
-window.refreshLPSupply = async () => {
-  console.log("Manual LP Supply refresh triggered");
-  await forceUpdateLPSupply();
-};
-
-window.refreshAllData = async () => {
-  console.log("Manual full data refresh triggered");
-  await updateData();
-};
-
-window.loadEventHistory = async () => {
-  console.log("Manual event history load triggered");
-  await fetchRecentEvents();
-};
